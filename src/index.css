@@ -52,13 +52,95 @@ body {
     radial-gradient(at 100% 100%, rgba(245, 158, 11, 0.08) 0px, transparent 50%);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
-  padding-bottom: 80px;
+  padding-bottom: 95px;
 }
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
   font-weight: 700;
   color: var(--text-main);
+}
+
+/* Header Bar Responsivo */
+.header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 1rem;
+  gap: 0.75rem;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.header-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.currency-toggle-group {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.currency-btn {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .header-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    padding-bottom: 0.85rem;
+  }
+
+  .header-top-row {
+    width: 100%;
+  }
+
+  .header-actions {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .currency-toggle-group {
+    flex: 1;
+    display: flex;
+  }
+
+  .currency-btn {
+    flex: 1;
+    text-align: center;
+    padding: 0.48rem 0.25rem;
+    font-size: 0.8rem;
+  }
 }
 
 /* Glassmorphism Containers */
@@ -307,7 +389,7 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
-/* Navigation Tabs */
+/* Navigation Tabs (Solo escritorio) */
 .nav-tabs {
   display: flex;
   background: rgba(15, 23, 42, 0.8);
@@ -317,6 +399,13 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid var(--border-color);
   gap: 0.35rem;
   overflow-x: auto;
+}
+
+@media (max-width: 767px) {
+  /* En celulares ocultamos los tabs de arriba porque ya tenemos la barra inferior moderna */
+  .nav-tabs {
+    display: none !important;
+  }
 }
 
 .tab-btn {
@@ -350,19 +439,23 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
 }
 
-/* Bottom Nav for Mobile */
+/* Barra inferior móvil - Estilo Dock espacioso y cómodo */
 .mobile-bottom-nav {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(11, 15, 25, 0.95);
-  backdrop-filter: var(--glass-backdrop);
+  background: rgba(11, 15, 25, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: space-around;
-  padding: 0.5rem 0.25rem;
+  align-items: center;
+  padding: 0.5rem 0.5rem;
+  padding-bottom: max(0.65rem, env(safe-area-inset-bottom, 0.65rem));
   z-index: 100;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
 }
 
 @media (min-width: 768px) {
@@ -372,25 +465,35 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .mobile-nav-item {
+  flex: 1;
+  max-width: 80px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.2rem;
+  justify-content: center;
+  gap: 0.3rem;
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-size: 0.7rem;
+  font-size: 0.72rem;
+  font-family: var(--font-heading);
   font-weight: 600;
   cursor: pointer;
-  padding: 0.35rem 0.75rem;
-  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.25rem;
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
+.mobile-nav-item:active {
+  transform: scale(0.95);
 }
 
 .mobile-nav-item.active {
-  color: var(--primary);
+  color: #fff;
+  background: rgba(99, 102, 241, 0.18);
 }
 
 .mobile-nav-item.active svg {
+  color: var(--primary);
   stroke: var(--primary);
-  transform: translateY(-2px);
 }
