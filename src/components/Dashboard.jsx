@@ -12,7 +12,7 @@ import {
   LineElement
 } from 'chart.js';
 import { Doughnut, Bar } from 'react-chartjs-2';
-import { DEFAULT_CATEGORIES } from '../lib/supabaseClient';
+import { DEFAULT_CATEGORIES, formatMoney, formatLimaDate } from '../lib/supabaseClient';
 import { Bug, DollarSign, PieChart, TrendingDown, Target, AlertTriangle, CheckCircle, Calendar } from 'lucide-react';
 
 ChartJS.register(
@@ -27,16 +27,23 @@ ChartJS.register(
   LineElement
 );
 
-export default function Dashboard({ expenses, monthlyBudget, setMonthlyBudget, categories = DEFAULT_CATEGORIES }) {
+export default function Dashboard({ expenses, monthlyBudget, setMonthlyBudget, categories = DEFAULT_CATEGORIES, currentCurrency = 'PEN' }) {
   const [timeFilter, setTimeFilter] = useState('this_month'); // 'this_month', 'last_30', 'all'
+  const [selectedCurrency, setSelectedCurrency] = useState(currentCurrency); // 'PEN', 'USD', 'all'
   const [editingBudget, setEditingBudget] = useState(false);
   const [tempBudget, setTempBudget] = useState(monthlyBudget.toString());
 
-  // Filter expenses by selected timeframe
+  // Filter expenses by selected timeframe and currency
   const filteredExpenses = useMemo(() => {
     const now = new Date();
     return expenses.filter(exp => {
       const expDate = new Date(exp.date);
+      // Currency filter
+      const expCurrency = exp.currency || 'PEN';
+      if (selectedCurrency !== 'all' && expCurrency !== selectedCurrency) {
+        return false;
+      }
+
       if (timeFilter === 'this_month') {
         return expDate.getMonth() === now.getMonth() && expDate.getFullYear() === now.getFullYear();
       } else if (timeFilter === 'last_30') {
@@ -45,7 +52,7 @@ export default function Dashboard({ expenses, monthlyBudget, setMonthlyBudget, c
       }
       return true;
     });
-  }, [expenses, timeFilter]);
+  }, [expenses, timeFilter, selectedCurrency]);
 
   // Compute Metrics
   const totalSpent = useMemo(() => {
@@ -110,7 +117,7 @@ export default function Dashboard({ expenses, monthlyBudget, setMonthlyBudget, c
     const sorted = [...filteredExpenses].sort((a, b) => new Date(a.date) - new Date(b.date));
     
     sorted.forEach(exp => {
-      const dateStr = new Date(exp.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+      const dateStr = formatLimaDate(exp.date, { day: '2-digit', month: 'short' });
       if (!dateMap[dateStr]) {
         dateMap[dateStr] = { ant: 0, regular: 0 };
       }
@@ -152,10 +159,12 @@ export default function Dashboard({ expenses, monthlyBudget, setMonthlyBudget, c
     setEditingBudget(false);
   };
 
+  const activeSymbol = selectedCurrency === 'USD' ? '$' : 'S/';
+
   return (
     <div className="animate-fade-in">
       
-      {/* Time Filter Bar */}
+      {/* Time & Currency Filter Bar */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -166,28 +175,59 @@ export default function Dashboard({ expenses, monthlyBudget, setMonthlyBudget, c
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <PieChart size={20} color="var(--primary)" />
-          <h2 style={{ fontSize: '1.2rem' }}>Resumen & Analítica</h2>
+          <h2 style={{ fontSize: '1.2rem' }}>Resumen Financiero</h2>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.25rem', borderRadius: 'var(--radius-md)' }}>
-          <button
-            className={`chip ${timeFilter === 'this_month' ? 'active' : ''}`}
-            onClick={() => setTimeFilter('this_month')}
-          >
-            Este Mes
-          </button>
-          <button
-            className={`chip ${timeFilter === 'last_30' ? 'active' : ''}`}
-            onClick={() => setTimeFilter('last_30')}
-          >
-            Últimos 30 días
-          </button>
-          <button
-            className={`chip ${timeFilter === 'all' ? 'active' : ''}`}
-            onClick={() => setTimeFilter('all')}
-          >
-            Todo
-          </button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+          {/* Currency Filter */}
+          <div style={{ display: 'flex', gap: '0.25rem', background: 'rgba(255,255,255,0.05)', padding: '0.2rem', borderRadius: 'var(--radius-md)' }}>
+            <button
+              className={`chip ${selectedCurrency === 'PEN' ? 'active' : ''}`}
+              onClick={() => setSelectedCurrency('PEN')}
+              style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+            >
+              🇵🇪 Soles (S/)
+            </button>
+            <button
+              className={`chip ${selectedCurrency === 'USD' ? 'active' : ''}`}
+              onClick={() => setSelectedCurrency('USD')}
+              style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+            >
+              💵 Dólares ($)
+            </button>
+            <button
+              className={`chip ${selectedCurrency === 'all' ? 'active' : ''}`}
+              onClick={() => setSelectedCurrency('all')}
+              style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+            >
+              Ambas
+            </button>
+          </div>
+
+          {/* Time Filter */}
+          <div style={{ display: 'flex', gap: '0.25rem', background: 'rgba(255,255,255,0.05)', padding: '0.2rem', borderRadius: 'var(--radius-md)' }}>
+            <button
+              className={`chip ${timeFilter === 'this_month' ? 'active' : ''}`}
+              onClick={() => setTimeFilter('this_month')}
+              style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+            >
+              Este Mes
+            </button>
+            <button
+              className={`chip ${timeFilter === 'last_30' ? 'active' : ''}`}
+              onClick={() => setTimeFilter('last_30')}
+              style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+            >
+              Últimos 30 días
+            </button>
+            <button
+              className={`chip ${timeFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setTimeFilter('all')}
+              style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+            >
+              Todo
+            </button>
+          </div>
         </div>
       </div>
 
@@ -203,10 +243,10 @@ export default function Dashboard({ expenses, monthlyBudget, setMonthlyBudget, c
             </div>
           </div>
           <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#fff' }}>
-            ${totalSpent.toFixed(2)}
+            {formatMoney(totalSpent, selectedCurrency === 'USD' ? 'USD' : 'PEN')}
           </div>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-            En {filteredExpenses.length} registro(s) de compra
+            En {filteredExpenses.length} registro(s) ({selectedCurrency === 'USD' ? 'USD' : 'PEN'})
           </p>
         </div>
 
@@ -223,10 +263,10 @@ export default function Dashboard({ expenses, monthlyBudget, setMonthlyBudget, c
             <span className="badge badge-ant">{antPercentage}% del Total</span>
           </div>
           <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#fef08a' }}>
-            ${antExpensesTotal.toFixed(2)}
+            {formatMoney(antExpensesTotal, selectedCurrency === 'USD' ? 'USD' : 'PEN')}
           </div>
           <p style={{ fontSize: '0.75rem', color: '#fde68a', marginTop: '0.35rem' }}>
-            {antExpensesTotal > 50 ? '⚠️ Atención: Los micro-gastos están sumando una cifra considerable.' : '👍 Control de fugas de dinero bajo control.'}
+            {antExpensesTotal > 50 ? '⚠️ Atención: Los micro-gastos diarios están acumulando una suma considerable.' : '👍 Buen control de fugas de dinero hormiga.'}
           </p>
         </div>
 
@@ -253,7 +293,7 @@ export default function Dashboard({ expenses, monthlyBudget, setMonthlyBudget, c
 
           {!editingBudget ? (
             <div style={{ fontSize: '1.8rem', fontWeight: '800', color: remainingBudget >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-              ${remainingBudget.toFixed(2)}
+              {formatMoney(remainingBudget, selectedCurrency === 'USD' ? 'USD' : 'PEN')}
             </div>
           ) : (
             <input
@@ -268,8 +308,8 @@ export default function Dashboard({ expenses, monthlyBudget, setMonthlyBudget, c
           {/* Budget Progress Bar */}
           <div style={{ marginTop: '0.75rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
-              <span>Usado: ${totalSpent.toFixed(0)}</span>
-              <span>Límite: ${monthlyBudget.toFixed(0)}</span>
+              <span>Usado: {activeSymbol} {totalSpent.toFixed(0)}</span>
+              <span>Límite: {activeSymbol} {monthlyBudget.toFixed(0)}</span>
             </div>
             <div style={{ height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
               <div style={{
@@ -290,7 +330,7 @@ export default function Dashboard({ expenses, monthlyBudget, setMonthlyBudget, c
         {/* Doughnut Chart (Categories) */}
         <div className="glass-card" style={{ padding: '1.5rem' }}>
           <h3 style={{ fontSize: '1.05rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>Distribución por Categoría</span>
+            <span>Distribución por Categoría ({activeSymbol})</span>
           </h3>
 
           {doughnutChartData.labels.length > 0 ? (
@@ -307,7 +347,7 @@ export default function Dashboard({ expenses, monthlyBudget, setMonthlyBudget, c
                     },
                     tooltip: {
                       callbacks: {
-                        label: (ctx) => ` $${ctx.raw.toFixed(2)} (${((ctx.raw / totalSpent) * 100).toFixed(1)}%)`
+                        label: (ctx) => ` ${activeSymbol} ${ctx.raw.toFixed(2)} (${totalSpent > 0 ? ((ctx.raw / totalSpent) * 100).toFixed(1) : 0}%)`
                       }
                     }
                   },
@@ -325,7 +365,7 @@ export default function Dashboard({ expenses, monthlyBudget, setMonthlyBudget, c
         {/* Bar Chart (Daily Trend) */}
         <div className="glass-card" style={{ padding: '1.5rem' }}>
           <h3 style={{ fontSize: '1.05rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>Evolución Diaria de Gastos</span>
+            <span>Evolución Diaria de Gastos ({activeSymbol})</span>
           </h3>
 
           {barChartData.labels.length > 0 ? (
@@ -344,7 +384,7 @@ export default function Dashboard({ expenses, monthlyBudget, setMonthlyBudget, c
                     y: {
                       stacked: true,
                       grid: { color: 'rgba(255,255,255,0.05)' },
-                      ticks: { color: '#94a3b8', font: { size: 10 }, callback: (v) => `$${v}` }
+                      ticks: { color: '#94a3b8', font: { size: 10 }, callback: (v) => `${activeSymbol} ${v}` }
                     }
                   },
                   plugins: {

@@ -1,23 +1,22 @@
-import React, { useState } from 'react';
-import { DEFAULT_CATEGORIES } from '../lib/supabaseClient';
-import { Bug, DollarSign, Calendar, FileText, CheckCircle2, Sparkles, AlertTriangle, Cloud } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { DEFAULT_CATEGORIES, getLimaNowIso, ANT_PRESETS_BY_CURRENCY, CURRENCIES } from '../lib/supabaseClient';
+import { Bug, DollarSign, Calendar, FileText, CheckCircle2, Sparkles, AlertTriangle, Cloud, Clock } from 'lucide-react';
 
-const ANT_PRESETS = [
-  { label: 'Café / Té ☕', amount: '2.50', desc: 'Café matutino / expreso' },
-  { label: 'Snack / Galletas 🍪', amount: '1.80', desc: 'Snack / galletas' },
-  { label: 'Agua / Soda 🥤', amount: '1.50', desc: 'Botella de agua / bebida' },
-  { label: 'Pasaje corto 🚌', amount: '1.20', desc: 'Pasaje urbano / pasaje corto' },
-  { label: 'Propina 🪙', amount: '1.00', desc: 'Propina o cambio' },
-  { label: 'Chicles / Dulces 🍬', amount: '0.80', desc: 'Golosinas o dulces' },
-];
-
-export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGORIES }) {
+export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGORIES, currentCurrency = 'PEN' }) {
+  const [formCurrency, setFormCurrency] = useState(currentCurrency);
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('gastos-hormiga');
   const [description, setDescription] = useState('');
   const [isAntExpense, setIsAntExpense] = useState(true);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 16));
+  const [date, setDate] = useState(getLimaNowIso());
   const [submitStatus, setSubmitStatus] = useState(null);
+
+  // Sync if parent currency changes
+  useEffect(() => {
+    setFormCurrency(currentCurrency);
+  }, [currentCurrency]);
+
+  const currentPresets = ANT_PRESETS_BY_CURRENCY[formCurrency] || ANT_PRESETS_BY_CURRENCY.PEN;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,6 +24,7 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
 
     const res = await onAddExpense({
       amount: parseFloat(amount),
+      currency: formCurrency,
       category,
       description,
       is_ant_expense: isAntExpense,
@@ -63,11 +63,11 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
   };
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: '650px', margin: '0 auto' }}>
+    <div className="animate-fade-in" style={{ maxWidth: '680px', margin: '0 auto' }}>
       <div className="glass-card" style={{ padding: '1.5rem 1.75rem' }}>
         
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div>
             <h2 style={{ fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span>Nuevo Gasto</span>
@@ -77,27 +77,74 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
                 </span>
               )}
             </h2>
-            <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)' }}>
-              Registra cualquier compra por pequeña que sea para controlar tu presupuesto.
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.2rem' }}>
+              <Clock size={13} color="var(--primary)" />
+              <span>Hora de Lima, Perú (UTC-5)</span>
             </p>
+          </div>
+
+          {/* Currency Switcher in Form */}
+          <div style={{
+            display: 'inline-flex',
+            background: 'rgba(255, 255, 255, 0.05)',
+            borderRadius: 'var(--radius-md)',
+            padding: '3px',
+            border: '1px solid var(--border-color)'
+          }}>
+            <button
+              type="button"
+              onClick={() => setFormCurrency('PEN')}
+              style={{
+                padding: '0.4rem 0.8rem',
+                fontSize: '0.8rem',
+                fontWeight: '700',
+                borderRadius: 'var(--radius-sm)',
+                border: 'none',
+                cursor: 'pointer',
+                background: formCurrency === 'PEN' ? 'var(--primary)' : 'transparent',
+                color: formCurrency === 'PEN' ? '#fff' : 'var(--text-muted)'
+              }}
+            >
+              🇵🇪 Soles (S/)
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormCurrency('USD')}
+              style={{
+                padding: '0.4rem 0.8rem',
+                fontSize: '0.8rem',
+                fontWeight: '700',
+                borderRadius: 'var(--radius-sm)',
+                border: 'none',
+                cursor: 'pointer',
+                background: formCurrency === 'USD' ? 'var(--primary)' : 'transparent',
+                color: formCurrency === 'USD' ? '#fff' : 'var(--text-muted)'
+              }}
+            >
+              💵 Dólares ($)
+            </button>
           </div>
         </div>
 
         {/* Quick Presets for "Gastos Hormiga" */}
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <Sparkles size={14} color="#f59e0b" />
-            <span>Acceso Rápido (Gastos Hormiga Frecuentes)</span>
+        <div style={{ marginBottom: '1.5rem', background: 'rgba(245, 158, 11, 0.05)', padding: '0.85rem 1rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(245, 158, 11, 0.15)' }}>
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#fef08a', marginBottom: '0.5rem' }}>
+            <Sparkles size={15} color="#f59e0b" />
+            <span>Accesos Rápidos Populares ({formCurrency === 'PEN' ? 'Soles S/' : 'Dólares $'})</span>
           </label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.4rem' }}>
-            {ANT_PRESETS.map((preset, idx) => (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
+            {currentPresets.map((preset, idx) => (
               <button
                 key={idx}
                 type="button"
                 className="chip chip-ant"
                 onClick={() => handleApplyPreset(preset)}
+                style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
               >
-                {preset.label}
+                <span>{preset.label}</span>
+                <span style={{ fontWeight: '700', color: '#fef08a' }}>
+                  ({formCurrency === 'USD' ? '$' : 'S/'} {preset.amount})
+                </span>
               </button>
             ))}
           </div>
@@ -106,18 +153,23 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
         <form onSubmit={handleSubmit}>
           {/* Amount Field (Highlighted) */}
           <div className="form-group">
-            <label className="form-label">Monto del Gasto ($)</label>
+            <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Monto del Gasto en {formCurrency === 'USD' ? 'Dólares ($ USD)' : 'Soles (S/ PEN)'}</span>
+              <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
+                Moneda: {formCurrency === 'USD' ? 'USD ($)' : 'PEN (S/)'}
+              </span>
+            </label>
             <div style={{ position: 'relative' }}>
               <div style={{
                 position: 'absolute',
                 left: '1rem',
                 top: '50%',
                 transform: 'translateY(-50%)',
-                color: 'var(--primary)',
-                fontWeight: 'bold',
-                fontSize: '1.2rem'
+                color: formCurrency === 'USD' ? '#10b981' : 'var(--primary)',
+                fontWeight: '800',
+                fontSize: '1.25rem'
               }}>
-                <DollarSign size={22} />
+                {formCurrency === 'USD' ? '$' : 'S/'}
               </div>
               <input
                 type="number"
@@ -128,7 +180,7 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
                 onChange={(e) => setAmount(e.target.value)}
                 className="form-input"
                 style={{
-                  paddingLeft: '2.8rem',
+                  paddingLeft: formCurrency === 'USD' ? '2.5rem' : '3.2rem',
                   fontSize: '1.5rem',
                   fontWeight: '700',
                   color: '#fff',

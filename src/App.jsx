@@ -10,14 +10,17 @@ import {
   deleteExpense,
   getMonthlyBudget,
   setMonthlyBudget as saveMonthlyBudget,
-  getCloudConfig
+  getCloudConfig,
+  getPreferredCurrency,
+  setPreferredCurrency
 } from './lib/supabaseClient';
 import { PlusCircle, LayoutDashboard, ListFilter, Cloud } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('form');
   const [expenses, setExpenses] = useState([]);
-  const [monthlyBudget, setMonthlyBudgetState] = useState(500);
+  const [monthlyBudget, setMonthlyBudgetState] = useState(1500);
+  const [currency, setCurrency] = useState(getPreferredCurrency());
   const [isCloudConfigOpen, setIsCloudConfigOpen] = useState(false);
   const [cloudEnabled, setCloudEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -39,6 +42,11 @@ export default function App() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleCurrencyChange = (newCur) => {
+    setPreferredCurrency(newCur);
+    setCurrency(newCur);
+  };
 
   const handleAddExpense = async (expenseData) => {
     const result = await saveExpense(expenseData);
@@ -69,6 +77,8 @@ export default function App() {
         cloudEnabled={cloudEnabled}
         onOpenCloudConfig={() => setIsCloudConfigOpen(true)}
         monthlyBudget={monthlyBudget}
+        currentCurrency={currency}
+        onCurrencyChange={handleCurrencyChange}
       />
 
       {/* Main Content Area */}
@@ -80,7 +90,10 @@ export default function App() {
         ) : (
           <>
             {activeTab === 'form' && (
-              <ExpenseForm onAddExpense={handleAddExpense} />
+              <ExpenseForm
+                onAddExpense={handleAddExpense}
+                currentCurrency={currency}
+              />
             )}
 
             {activeTab === 'dashboard' && (
@@ -88,6 +101,7 @@ export default function App() {
                 expenses={expenses}
                 monthlyBudget={monthlyBudget}
                 setMonthlyBudget={handleUpdateBudget}
+                currentCurrency={currency}
               />
             )}
 

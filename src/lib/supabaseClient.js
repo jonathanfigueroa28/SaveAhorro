@@ -13,9 +13,87 @@ export const DEFAULT_CATEGORIES = [
   { id: 'otros', name: 'Otros / Imprevistos', icon: 'HelpCircle', color: '#64748b', isAnt: false },
 ];
 
+export const CURRENCIES = {
+  PEN: { code: 'PEN', symbol: 'S/', name: 'Soles (S/)' },
+  USD: { code: 'USD', symbol: '$', name: 'Dólares ($)' }
+};
+
+// Formato de moneda profesional
+export const formatMoney = (amount, currency = 'PEN') => {
+  const num = parseFloat(amount) || 0;
+  const sym = currency === 'USD' ? '$' : 'S/';
+  return `${sym} ${num.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
+// Obtener fecha/hora actual en zona horaria Lima (UTC-5) para input datetime-local
+export const getLimaNowIso = () => {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  return formatter.format(now).replace(' ', 'T').slice(0, 16);
+};
+
+// Formatear cualquier fecha ISO en zona horaria Lima (UTC-5)
+export const formatLimaDate = (dateVal, options = {}) => {
+  if (!dateVal) return '';
+  const date = typeof dateVal === 'string' ? new Date(dateVal) : dateVal;
+  return new Intl.DateTimeFormat('es-PE', {
+    timeZone: 'America/Lima',
+    ...options
+  }).format(date);
+};
+
+// Presets de gastos hormiga peruanos y rápidos
+export const ANT_PRESETS_BY_CURRENCY = {
+  PEN: [
+    { label: '☕ Café pasado', amount: '3.50', desc: 'Café pasado / expreso' },
+    { label: '🍵 Emoliente', amount: '2.00', desc: 'Emoliente calentito' },
+    { label: '🥖 Pan c/ Chicharrón', amount: '5.00', desc: 'Panadería / antojo' },
+    { label: '🍪 Galleta / Snack', amount: '1.50', desc: 'Galleta / snack' },
+    { label: '🥤 Gaseosa / Agua', amount: '2.50', desc: 'Bebida al paso' },
+    { label: '🚌 Combi / Micro', amount: '1.50', desc: 'Pasaje urbano' },
+    { label: '🚊 Metropolitano / Tren', amount: '3.50', desc: 'Recarga transporte' },
+    { label: '🚕 Taxi / Yape pasaje', amount: '8.00', desc: 'Taxi al paso' },
+    { label: '🍫 Chocolate / Dulce', amount: '2.50', desc: 'Golosina / antojo' },
+    { label: '🍦 Helado', amount: '3.00', desc: 'Helado al paso' },
+    { label: '📱 Recarga celular', amount: '5.00', desc: 'Recarga prepago' },
+    { label: '🪙 Propina', amount: '1.00', desc: 'Propina' },
+    { label: '🍬 Chicles / Caramelos', amount: '0.50', desc: 'Chicles / caramelos' },
+    { label: '🥪 Menú del día', amount: '12.00', desc: 'Almuerzo / menú al paso' },
+  ],
+  USD: [
+    { label: '☕ Coffee', amount: '3.00', desc: 'Coffee / espresso' },
+    { label: '🍪 Snack / Cookies', amount: '1.50', desc: 'Snack / treat' },
+    { label: '🥤 Soda / Water', amount: '1.50', desc: 'Cold drink' },
+    { label: '🚌 Transit / Bus', amount: '2.50', desc: 'Bus or subway fare' },
+    { label: '🚕 Uber / Taxi', amount: '8.00', desc: 'Ride share' },
+    { label: '🍦 Ice cream', amount: '3.00', desc: 'Ice cream' },
+    { label: '🪙 Tip', amount: '1.00', desc: 'Tip' },
+    { label: '🍬 Candy / Gum', amount: '0.50', desc: 'Candy / gum' },
+    { label: '🥪 Lunch / Sandwich', amount: '7.50', desc: 'Quick lunch' },
+  ]
+};
+
 const LOCAL_STORAGE_KEY_EXPENSES = 'control_ahorro_expenses_v1';
 const LOCAL_STORAGE_KEY_CONFIG = 'control_ahorro_config_v1';
 const LOCAL_STORAGE_KEY_BUDGET = 'control_ahorro_budget_v1';
+const LOCAL_STORAGE_KEY_CURRENCY = 'control_ahorro_currency_v1';
+
+export const getPreferredCurrency = () => {
+  return localStorage.getItem(LOCAL_STORAGE_KEY_CURRENCY) || 'PEN';
+};
+
+export const setPreferredCurrency = (currency) => {
+  localStorage.setItem(LOCAL_STORAGE_KEY_CURRENCY, currency);
+};
 
 // Helper to get stored config (checks localStorage or Vite environment variables from Vercel)
 export const getCloudConfig = () => {
@@ -107,9 +185,11 @@ export const fetchExpenses = async () => {
 };
 
 export const saveExpense = async (expense) => {
+  const currentCurrency = expense.currency || getPreferredCurrency() || 'PEN';
   const newExpense = {
     id: expense.id || 'exp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
     amount: parseFloat(expense.amount),
+    currency: currentCurrency,
     category: expense.category,
     description: expense.description || '',
     is_ant_expense: Boolean(expense.is_ant_expense),
@@ -128,7 +208,15 @@ export const saveExpense = async (expense) => {
   const client = getSupabaseClient();
   if (client) {
     try {
-      const { error } = await client.from('expenses').upsert([newExpense]);
+      // Intentar guardar con la columna currency
+      let { error } = await client.from('expenses').upsert([newExpense]);
+      // Si la columna currency aún no ha sido agregada en la tabla de Supabase, reintentar sin romper el guardado
+      if (error && (error.code === 'PGRST204' || error.message?.includes('currency'))) {
+        const { currency, ...payloadWithoutCurrency } = newExpense;
+        const retry = await client.from('expenses').upsert([payloadWithoutCurrency]);
+        error = retry.error;
+      }
+
       if (error) {
         console.error('Supabase save error:', error);
         cloudError = error.message;
@@ -164,54 +252,59 @@ export const deleteExpense = async (id) => {
 
 export const getMonthlyBudget = () => {
   const b = localStorage.getItem(LOCAL_STORAGE_KEY_BUDGET);
-  return b ? parseFloat(b) : 500.00; // Default budget
+  return b ? parseFloat(b) : 1500.00; // Presupuesto mensual por defecto en Soles
 };
 
 export const setMonthlyBudget = (amount) => {
   localStorage.setItem(LOCAL_STORAGE_KEY_BUDGET, amount.toString());
 };
 
-// Seed demo data for first time user experience
+// Seed demo data for first time user experience (adaptado a Lima, Perú en Soles)
 function getInitialSeedData() {
   const today = new Date();
   const seed = [
     {
       id: 'demo_1',
       amount: 3.50,
+      currency: 'PEN',
       category: 'gastos-hormiga',
-      description: 'Café expreso y galleta de chocolate ☕🍪',
+      description: 'Café pasado y galleta ☕🍪',
       is_ant_expense: true,
       date: new Date(today.getTime() - 2 * 3600 * 1000).toISOString()
     },
     {
       id: 'demo_2',
-      amount: 1.80,
+      amount: 2.00,
+      currency: 'PEN',
       category: 'gastos-hormiga',
-      description: 'Botella de agua y chicle en la calle 💧',
+      description: 'Emoliente caliente en la esquina 🍵',
       is_ant_expense: true,
       date: new Date(today.getTime() - 20 * 3600 * 1000).toISOString()
     },
     {
       id: 'demo_3',
-      amount: 45.00,
+      amount: 65.00,
+      currency: 'PEN',
       category: 'comida',
-      description: 'Supermercado semanal 🛒',
+      description: 'Compras semanales en mercado / súper 🛒',
       is_ant_expense: false,
       date: new Date(today.getTime() - 48 * 3600 * 1000).toISOString()
     },
     {
       id: 'demo_4',
-      amount: 12.50,
+      amount: 1.50,
+      currency: 'PEN',
       category: 'transporte',
-      description: 'Recarga de tarjeta de transporte 🚌',
+      description: 'Pasaje en combi / micro 🚌',
       is_ant_expense: false,
       date: new Date(today.getTime() - 72 * 3600 * 1000).toISOString()
     },
     {
       id: 'demo_5',
-      amount: 2.20,
+      amount: 2.50,
+      currency: 'PEN',
       category: 'gastos-hormiga',
-      description: 'Snack de papas en la oficina 🍟',
+      description: 'Gaseosa Inca Kola / agua al paso 🥤',
       is_ant_expense: true,
       date: new Date(today.getTime() - 96 * 3600 * 1000).toISOString()
     }

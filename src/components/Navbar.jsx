@@ -1,7 +1,7 @@
 import React from 'react';
 import { PiggyBank, Cloud, CloudOff, PlusCircle, LayoutDashboard, ListFilter, Settings } from 'lucide-react';
 
-export default function Navbar({ activeTab, setActiveTab, cloudEnabled, onOpenCloudConfig, monthlyBudget }) {
+export default function Navbar({ activeTab, setActiveTab, cloudEnabled, onOpenCloudConfig, monthlyBudget, currentCurrency, onCurrencyChange }) {
   return (
     <header style={{ marginBottom: '1.5rem' }}>
       <div style={{
@@ -36,28 +36,68 @@ export default function Navbar({ activeTab, setActiveTab, cloudEnabled, onOpenCl
           </div>
         </div>
 
-        {/* Right Actions: Budget indicator & Cloud status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        {/* Right Actions: Currency selector & Cloud status */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {/* Currency Toggle Switch */}
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            background: 'rgba(255, 255, 255, 0.06)',
+            padding: '2px',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-color)'
+          }}>
+            <button
+              onClick={() => onCurrencyChange && onCurrencyChange('PEN')}
+              style={{
+                padding: '0.35rem 0.65rem',
+                fontSize: '0.75rem',
+                fontWeight: '700',
+                border: 'none',
+                borderRadius: 'var(--radius-sm)',
+                cursor: 'pointer',
+                background: currentCurrency === 'PEN' ? 'var(--primary)' : 'transparent',
+                color: currentCurrency === 'PEN' ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.2s ease'
+              }}
+              title="Moneda principal: Soles peruanos (PEN)"
+            >
+              🇵🇪 S/ Soles
+            </button>
+            <button
+              onClick={() => onCurrencyChange && onCurrencyChange('USD')}
+              style={{
+                padding: '0.35rem 0.65rem',
+                fontSize: '0.75rem',
+                fontWeight: '700',
+                border: 'none',
+                borderRadius: 'var(--radius-sm)',
+                cursor: 'pointer',
+                background: currentCurrency === 'USD' ? 'var(--primary)' : 'transparent',
+                color: currentCurrency === 'USD' ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.2s ease'
+              }}
+              title="Moneda principal: Dólares americanos (USD)"
+            >
+              💵 $ USD
+            </button>
+          </div>
+
+          {/* Cloud button */}
           <button
             onClick={onOpenCloudConfig}
             className="btn btn-secondary"
             style={{
-              padding: '0.5rem 0.85rem',
-              fontSize: '0.8rem',
+              padding: '0.45rem 0.75rem',
+              fontSize: '0.78rem',
               borderColor: cloudEnabled ? 'var(--success)' : 'var(--border-color)'
             }}
             title="Configurar sincronización en la nube (Supabase)"
           >
             {cloudEnabled ? (
-              <>
-                <Cloud size={16} color="var(--success)" />
-                <span style={{ color: 'var(--success)', display: 'none' }}>Nube Activa</span>
-              </>
+              <Cloud size={15} color="var(--success)" />
             ) : (
-              <>
-                <CloudOff size={16} color="var(--text-muted)" />
-                <span style={{ color: 'var(--text-muted)', display: 'none' }}>Sin Nube</span>
-              </>
+              <CloudOff size={15} color="var(--text-muted)" />
             )}
             <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>
               {cloudEnabled ? 'Nube 🟢' : 'Conectar Nube'}

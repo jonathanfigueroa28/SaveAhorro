@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { DEFAULT_CATEGORIES } from '../lib/supabaseClient';
+import { DEFAULT_CATEGORIES, formatMoney, formatLimaDate } from '../lib/supabaseClient';
 import { Search, Download, Trash2, Bug, Filter, Calendar, FileSpreadsheet } from 'lucide-react';
 
 export default function ExpenseList({ expenses, onDeleteExpense, categories = DEFAULT_CATEGORIES }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedCurrency, setSelectedCurrency] = useState('all');
   const [onlyAnt, setOnlyAnt] = useState(false);
 
   const filteredExpenses = useMemo(() => {
@@ -17,23 +18,28 @@ export default function ExpenseList({ expenses, onDeleteExpense, categories = DE
       // Category filter
       const matchesCategory = selectedCategory === 'all' || exp.category === selectedCategory;
 
+      // Currency filter
+      const expCurrency = exp.currency || 'PEN';
+      const matchesCurrency = selectedCurrency === 'all' || expCurrency === selectedCurrency;
+
       // Ant filter
       const matchesAnt = !onlyAnt || (exp.is_ant_expense || exp.category === 'gastos-hormiga');
 
-      return matchesSearch && matchesCategory && matchesAnt;
+      return matchesSearch && matchesCategory && matchesCurrency && matchesAnt;
     });
-  }, [expenses, searchTerm, selectedCategory, onlyAnt]);
+  }, [expenses, searchTerm, selectedCategory, selectedCurrency, onlyAnt]);
 
   // Export to CSV Function
   const handleExportCSV = () => {
     if (filteredExpenses.length === 0) return;
 
-    const headers = ['ID', 'Fecha', 'Categoria', 'Monto', 'Es Gasto Hormiga', 'Descripcion'];
+    const headers = ['ID', 'Fecha (Lima UTC-5)', 'Moneda', 'Monto', 'Categoria', 'Es Gasto Hormiga', 'Descripcion'];
     const rows = filteredExpenses.map(exp => [
       exp.id,
-      new Date(exp.date).toLocaleString('es-ES'),
-      categories.find(c => c.id === exp.category)?.name || exp.category,
+      formatLimaDate(exp.date, { dateStyle: 'short', timeStyle: 'short' }),
+      exp.currency || 'PEN',
       exp.amount.toFixed(2),
+      categories.find(c => c.id === exp.category)?.name || exp.category,
       exp.is_ant_expense ? 'SI' : 'NO',
       `"${(exp.description || '').replace(/"/g, '""')}"`
     ]);
@@ -44,7 +50,7 @@ export default function ExpenseList({ expenses, onDeleteExpense, categories = DE
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `control_ahorro_gastos_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `control_ahorro_gastos_lima_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -119,6 +125,20 @@ export default function ExpenseList({ expenses, onDeleteExpense, categories = DE
             </select>
           </div>
 
+          {/* Currency Dropdown Filter */}
+          <div>
+            <select
+              value={selectedCurrency}
+              onChange={(e) => setSelectedCurrency(e.target.value)}
+              className="form-select"
+              style={{ fontSize: '0.875rem' }}
+            >
+              <option value="all">Todas las Monedas (S/ y $)</option>
+              <option value="PEN">🇵🇪 Solo Soles (S/)</option>
+              <option value="USD">💵 Solo Dólares ($)</option>
+            </select>
+          </div>
+
           {/* Toggle Only Ant Expenses */}
           <button
             className={`btn ${onlyAnt ? 'btn-ant' : 'btn-secondary'}`}
@@ -139,7 +159,7 @@ export default function ExpenseList({ expenses, onDeleteExpense, categories = DE
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
               <thead>
                 <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
-                  <th style={{ padding: '0.85rem 1rem' }}>Fecha</th>
+                  <th style={{ padding: '0.85rem 1rem' }}>Fecha (Lima)</th>
                   <th style={{ padding: '0.85rem 1rem' }}>Categoría</th>
                   <th style={{ padding: '0.85rem 1rem' }}>Descripción / Nota</th>
                   <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>Monto</th>
@@ -150,18 +170,17 @@ export default function ExpenseList({ expenses, onDeleteExpense, categories = DE
                 {filteredExpenses.map(exp => {
                   const catInfo = getCategoryInfo(exp.category);
                   const isAnt = exp.is_ant_expense || exp.category === 'gastos-hormiga';
-                  const expDate = new Date(exp.date);
                   
                   return (
                     <tr key={exp.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background 0.2s' }}>
                       
-                      {/* Date Column */}
+                      {/* Date Column (Lima UTC-5) */}
                       <td style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap' }}>
                         <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>
-                          {expDate.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          {formatLimaDate(exp.date, { day: '2-digit', month: 'short', year: 'numeric' })}
                         </div>
                         <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
-                          {expDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                          {formatLimaDate(exp.date, { hour: '2-digit', minute: '2-digit', hour12: true })}
                         </div>
                       </td>
 
@@ -185,7 +204,7 @@ export default function ExpenseList({ expenses, onDeleteExpense, categories = DE
 
                       {/* Description Column */}
                       <td style={{ padding: '0.85rem 1rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                           <span>{exp.description || 'Sin nota'}</span>
                           {isAnt && (
                             <span className="badge badge-ant" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>
@@ -195,9 +214,9 @@ export default function ExpenseList({ expenses, onDeleteExpense, categories = DE
                         </div>
                       </td>
 
-                      {/* Amount Column */}
-                      <td style={{ padding: '0.85rem 1rem', textAlign: 'right', fontWeight: '700', fontSize: '1rem', color: isAnt ? '#fef08a' : '#fff' }}>
-                        ${exp.amount.toFixed(2)}
+                      {/* Amount Column formatted in Soles or Dollars */}
+                      <td style={{ padding: '0.85rem 1rem', textAlign: 'right', fontWeight: '700', fontSize: '1rem', color: isAnt ? '#fef08a' : '#fff', whiteSpace: 'nowrap' }}>
+                        {formatMoney(exp.amount, exp.currency || 'PEN')}
                       </td>
 
                       {/* Actions Column */}

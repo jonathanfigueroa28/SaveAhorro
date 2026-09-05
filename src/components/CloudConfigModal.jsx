@@ -14,12 +14,16 @@ export default function CloudConfigModal({ isOpen, onClose, onConfigSaved }) {
   const sqlScript = `create table if not exists public.expenses (
   id text primary key,
   amount numeric not null,
+  currency text default 'PEN',
   category text not null,
   description text,
   is_ant_expense boolean default false,
   date timestamp with time zone default now(),
   created_at timestamp with time zone default now()
 );
+
+-- Si la tabla ya fue creada anteriormente, añadir la columna currency si no existe:
+alter table public.expenses add column if not exists currency text default 'PEN';
 
 -- Otorgar permisos completos al rol anon (público) y autenticado
 grant all on table public.expenses to anon, authenticated, service_role;
