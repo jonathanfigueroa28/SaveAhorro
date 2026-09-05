@@ -123,18 +123,23 @@ export const saveExpense = async (expense) => {
   existing = [newExpense, ...existing.filter(e => e.id !== newExpense.id)];
   localStorage.setItem(LOCAL_STORAGE_KEY_EXPENSES, JSON.stringify(existing));
 
+  let cloudError = null;
   // Sync to Supabase if available
   const client = getSupabaseClient();
   if (client) {
     try {
       const { error } = await client.from('expenses').upsert([newExpense]);
-      if (error) console.error('Supabase save error:', error.message);
+      if (error) {
+        console.error('Supabase save error:', error);
+        cloudError = error.message;
+      }
     } catch (err) {
       console.error('Supabase exception during save:', err);
+      cloudError = err.message;
     }
   }
 
-  return newExpense;
+  return { expense: newExpense, cloudError, isCloudEnabled: Boolean(client) };
 };
 
 export const deleteExpense = async (id) => {

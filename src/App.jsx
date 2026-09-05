@@ -41,8 +41,10 @@ export default function App() {
   }, []);
 
   const handleAddExpense = async (expenseData) => {
-    const saved = await saveExpense(expenseData);
+    const result = await saveExpense(expenseData);
+    const saved = result.expense || result;
     setExpenses(prev => [saved, ...prev.filter(e => e.id !== saved.id)]);
+    return result;
   };
 
   const handleDeleteExpense = async (id) => {

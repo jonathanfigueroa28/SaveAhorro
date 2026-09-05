@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DEFAULT_CATEGORIES } from '../lib/supabaseClient';
-import { Bug, DollarSign, Calendar, FileText, CheckCircle2, Sparkles } from 'lucide-react';
+import { Bug, DollarSign, Calendar, FileText, CheckCircle2, Sparkles, AlertTriangle, Cloud } from 'lucide-react';
 
 const ANT_PRESETS = [
   { label: 'Café / Té ☕', amount: '2.50', desc: 'Café matutino / expreso' },
@@ -17,13 +17,13 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
   const [description, setDescription] = useState('');
   const [isAntExpense, setIsAntExpense] = useState(true);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 16));
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState(null);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!amount || parseFloat(amount) <= 0) return;
 
-    onAddExpense({
+    const res = await onAddExpense({
       amount: parseFloat(amount),
       category,
       description,
@@ -34,8 +34,25 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
     // Reset form fields
     setAmount('');
     setDescription('');
-    setShowSuccessToast(true);
-    setTimeout(() => setShowSuccessToast(false), 2500);
+
+    if (res?.cloudError) {
+      setSubmitStatus({
+        type: 'warning',
+        message: `Guardado en tu navegador, pero Supabase reportó: "${res.cloudError}". Recuerda ejecutar el script de permisos en Supabase SQL Editor.`
+      });
+    } else if (res?.isCloudEnabled) {
+      setSubmitStatus({
+        type: 'success',
+        message: '¡Gasto guardado en tu base de datos de Supabase en la nube con éxito! ☁️✅'
+      });
+    } else {
+      setSubmitStatus({
+        type: 'success',
+        message: '¡Gasto registrado localmente con éxito!'
+      });
+    }
+
+    setTimeout(() => setSubmitStatus(null), 5000);
   };
 
   const handleApplyPreset = (preset) => {
@@ -223,21 +240,26 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
         </form>
 
         {/* Toast Notification */}
-        {showSuccessToast && (
+        {submitStatus && (
           <div className="animate-fade-in" style={{
             marginTop: '1rem',
             padding: '0.85rem 1rem',
-            background: 'var(--success-light)',
-            border: '1px solid var(--success)',
+            background: submitStatus.type === 'warning' ? 'rgba(245, 158, 11, 0.15)' : 'var(--success-light)',
+            border: `1px solid ${submitStatus.type === 'warning' ? '#f59e0b' : 'var(--success)'}`,
             borderRadius: 'var(--radius-md)',
-            color: '#a7f3d0',
+            color: submitStatus.type === 'warning' ? '#fef08a' : '#a7f3d0',
             display: 'flex',
-            alignItems: 'center',
+            alignItems: 'flex-start',
             gap: '0.6rem',
-            fontSize: '0.9rem'
+            fontSize: '0.875rem',
+            lineHeight: '1.4'
           }}>
-            <CheckCircle2 size={20} color="var(--success)" />
-            <span>¡Gasto registrado con éxito y guardado correctamente!</span>
+            {submitStatus.type === 'warning' ? (
+              <AlertTriangle size={20} color="#f59e0b" style={{ flexShrink: 0, marginTop: '2px' }} />
+            ) : (
+              <CheckCircle2 size={20} color="var(--success)" style={{ flexShrink: 0, marginTop: '2px' }} />
+            )}
+            <span>{submitStatus.message}</span>
           </div>
         )}
 

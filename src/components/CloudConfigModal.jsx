@@ -11,7 +11,7 @@ export default function CloudConfigModal({ isOpen, onClose, onConfigSaved }) {
 
   if (!isOpen) return null;
 
-  const sqlScript = `create table public.expenses (
+  const sqlScript = `create table if not exists public.expenses (
   id text primary key,
   amount numeric not null,
   category text not null,
@@ -21,9 +21,13 @@ export default function CloudConfigModal({ isOpen, onClose, onConfigSaved }) {
   created_at timestamp with time zone default now()
 );
 
--- Permitir lectura y escritura pública para tu app personal
+-- Otorgar permisos completos al rol anon (público) y autenticado
+grant all on table public.expenses to anon, authenticated, service_role;
+
+-- Habilitar RLS y permitir acceso completo (lectura y escritura)
 alter table public.expenses enable row level security;
-create policy "Acceso Publico Expenses" on public.expenses for all using (true);`;
+drop policy if exists "Acceso Publico Expenses" on public.expenses;
+create policy "Acceso Publico Expenses" on public.expenses for all to public using (true) with check (true);`;
 
   const handleCopySql = () => {
     navigator.clipboard.writeText(sqlScript);
