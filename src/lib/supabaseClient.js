@@ -54,7 +54,9 @@ export const getSupabaseClient = () => {
   if (config.isEnabled && config.supabaseUrl && config.supabaseAnonKey) {
     if (!supabaseInstance) {
       try {
-        supabaseInstance = createClient(config.supabaseUrl, config.supabaseAnonKey);
+        // Sanitize URL: Remove /rest/v1 or trailing slashes if user pasted the REST endpoint
+        const cleanUrl = config.supabaseUrl.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+        supabaseInstance = createClient(cleanUrl, config.supabaseAnonKey.trim());
       } catch (e) {
         console.error('Failed to initialize Supabase client:', e);
         return null;
