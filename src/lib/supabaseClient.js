@@ -17,16 +17,28 @@ const LOCAL_STORAGE_KEY_EXPENSES = 'control_ahorro_expenses_v1';
 const LOCAL_STORAGE_KEY_CONFIG = 'control_ahorro_config_v1';
 const LOCAL_STORAGE_KEY_BUDGET = 'control_ahorro_budget_v1';
 
-// Helper to get stored config
+// Helper to get stored config (checks localStorage or Vite environment variables from Vercel)
 export const getCloudConfig = () => {
+  const envUrl = import.meta.env?.VITE_SUPABASE_URL;
+  const envKey = import.meta.env?.VITE_SUPABASE_ANON_KEY;
+
   try {
     const configStr = localStorage.getItem(LOCAL_STORAGE_KEY_CONFIG);
     if (configStr) {
-      return JSON.parse(configStr);
+      const parsed = JSON.parse(configStr);
+      // If user manually configured it, prioritize it, otherwise fallback to env
+      if (parsed.supabaseUrl && parsed.supabaseAnonKey) {
+        return parsed;
+      }
     }
   } catch (e) {
     console.error('Error reading cloud config', e);
   }
+
+  if (envUrl && envKey) {
+    return { supabaseUrl: envUrl, supabaseAnonKey: envKey, isEnabled: true };
+  }
+
   return { supabaseUrl: '', supabaseAnonKey: '', isEnabled: false };
 };
 
