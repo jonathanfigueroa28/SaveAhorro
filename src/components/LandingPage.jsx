@@ -18,7 +18,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 
-export default function LandingPage({ onStartDemo, onEnterApp, onOpenTutorial }) {
+export default function LandingPage({ onStartDemo, onEnterApp, onOpenTutorial, isLoggedIn }) {
   return (
     <div className="animate-fade-in" style={{ maxWidth: '1080px', margin: '0 auto', padding: '1rem 0.5rem 4rem 0.5rem' }}>
       
@@ -72,7 +72,7 @@ export default function LandingPage({ onStartDemo, onEnterApp, onOpenTutorial })
             className="btn btn-primary"
             style={{ padding: '0.45rem 0.95rem', fontSize: '0.8rem', fontWeight: 700 }}
           >
-            <span>Ir a Mi Cuenta</span>
+            <span>{isLoggedIn ? 'Ir a Mi Cuenta' : 'Iniciar Sesión'}</span>
             <ArrowRight size={14} />
           </button>
         </div>

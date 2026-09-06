@@ -34,7 +34,10 @@ import { PlusCircle, LayoutDashboard, ListFilter, Cloud, Sparkles, ArrowRight, A
 export default function App() {
   // Navigation mode: 'landing', 'app' (real user), or 'demo' (interactive test)
   const [viewMode, setViewMode] = useState(() => {
-    return localStorage.getItem('saveahorro_view_mode') || 'landing';
+    const saved = localStorage.getItem('saveahorro_view_mode');
+    const hasUser = localStorage.getItem('saveahorro_active_user');
+    if (saved === 'app' && !hasUser) return 'landing';
+    return saved || 'landing';
   });
 
   const [demoProfileKey, setDemoProfileKey] = useState('carlos'); // 'carlos' or 'pepe'
@@ -109,6 +112,11 @@ export default function App() {
     
     const user = await getCurrentUser();
     setCurrentUser(user);
+    if (user?.user_metadata?.firstName || user?.user_metadata?.first_name) {
+      const fName = user.user_metadata.firstName || user.user_metadata.first_name;
+      const lName = user.user_metadata.lastName || user.user_metadata.last_name || '';
+      setUserProfile({ firstName: fName, lastName: lName });
+    }
 
     const budget = getMonthlyBudget();
     setMonthlyBudgetState(budget);
@@ -150,6 +158,7 @@ export default function App() {
       console.warn('Sign out warning:', err);
     }
     localStorage.removeItem('saveahorro_view_mode');
+    localStorage.removeItem('saveahorro_active_user');
     setCurrentUser(null);
     setViewMode('landing');
     loadData();
@@ -212,9 +221,26 @@ export default function App() {
     setIsTourOpen(true);  // Activar el tour interactivo guiado de inmediato
   };
 
-  const handleEnterRealApp = () => {
-    setViewMode('app');
+  const handleAuthSuccess = (user, profile) => {
+    setCurrentUser(user);
+    if (profile) {
+      setUserProfile(profile);
+      localStorage.setItem('saveahorro_user_profile', JSON.stringify(profile));
+    }
+    localStorage.setItem('saveahorro_active_user', JSON.stringify(user));
     localStorage.setItem('saveahorro_view_mode', 'app');
+    setViewMode('app');
+    setIsAuthModalOpen(false);
+    loadData();
+  };
+
+  const handleEnterRealApp = () => {
+    if (currentUser) {
+      setViewMode('app');
+      localStorage.setItem('saveahorro_view_mode', 'app');
+    } else {
+      setIsAuthModalOpen(true);
+    }
   };
 
   // Active data selection
@@ -260,11 +286,18 @@ export default function App() {
           onStartDemo={handleStartDemo}
           onEnterApp={handleEnterRealApp}
           onOpenTutorial={() => setIsTutorialOpen(true)}
+          isLoggedIn={Boolean(currentUser)}
         />
 
         <GuidedTutorialModal
           isOpen={isTutorialOpen}
           onClose={() => setIsTutorialOpen(false)}
+        />
+
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          onAuthSuccess={handleAuthSuccess}
         />
       </div>
     );
@@ -294,7 +327,7 @@ export default function App() {
               </span>
 
               {/* Persona Switcher Buttons */}
-              <div className="demo-profile-pills">
+              <div id="tour-persona-switcher" className="demo-profile-pills">
                 <button
                   type="button"
                   onClick={() => setDemoProfileKey('carlos')}
@@ -511,14 +544,11 @@ export default function App() {
         onConfigSaved={loadData}
       />
 
-      {/* Auth Modal (Preserved in standby) */}
+      {/* Auth Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
-        onAuthSuccess={(user) => {
-          setCurrentUser(user);
-          loadData();
-        }}
+        onAuthSuccess={handleAuthSuccess}
       />
 
     </div>

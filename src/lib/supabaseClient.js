@@ -237,23 +237,30 @@ export const resetSupabaseClient = () => {
 
 export const getCurrentUser = async () => {
   const client = getSupabaseClient();
-  if (!client) return null;
-  try {
-    const { data: { session }, error } = await client.auth.getSession();
-    if (error || !session) return null;
-    return session.user;
-  } catch (err) {
-    console.warn('Error fetching session:', err);
-    return null;
+  if (client) {
+    try {
+      const { data: { session }, error } = await client.auth.getSession();
+      if (!error && session?.user) return session.user;
+    } catch (err) {
+      console.warn('Error fetching session:', err);
+    }
   }
+  try {
+    const local = localStorage.getItem('saveahorro_active_user');
+    if (local) return JSON.parse(local);
+  } catch (e) {}
+  return null;
 };
 
-export const signUpWithEmail = async (email, password) => {
+export const signUpWithEmail = async (email, password, metadata = {}) => {
   const client = getSupabaseClient();
   if (!client) throw new Error('Supabase no está configurado. Conéctalo en el botón Nube.');
   const { data, error } = await client.auth.signUp({
     email: email.trim(),
-    password: password.trim()
+    password: password.trim(),
+    options: {
+      data: metadata
+    }
   });
   if (error) throw error;
   return data;

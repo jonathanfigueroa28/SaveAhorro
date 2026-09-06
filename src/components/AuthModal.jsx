@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { signInWithEmail, signUpWithEmail, getCurrentUser } from '../lib/supabaseClient';
-import { User, Mail, Lock, LogIn, UserPlus, X, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
+import { signInWithEmail, signUpWithEmail, getCurrentUser, getSupabaseClient } from '../lib/supabaseClient';
+import { User, Mail, Lock, LogIn, UserPlus, X, CheckCircle2, AlertCircle, ShieldCheck, Sparkles } from 'lucide-react';
 
 export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   const [mode, setMode] = useState('login'); // 'login' or 'register'
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,34 +24,134 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       return;
     }
 
+    if (mode === 'register' && !firstName.trim()) {
+      setErrorMsg('Por favor escribe tu nombre para personalizar tu cuenta.');
+      return;
+    }
+
     if (password.length < 6) {
       setErrorMsg('La contraseña debe tener al menos 6 caracteres.');
       return;
     }
 
     setLoading(true);
+    const client = getSupabaseClient();
+
     try {
-      if (mode === 'login') {
-        const data = await signInWithEmail(email, password);
-        if (data?.user) {
-          setSuccessMsg('¡Sesión iniciada con éxito! Bienvenido a SaveAhorro.');
-          setTimeout(() => {
-            onAuthSuccess && onAuthSuccess(data.user);
-            onClose();
-          }, 900);
+      if (client) {
+        // Conexión Supabase Activa
+        if (mode === 'login') {
+          const data = await signInWithEmail(email, password);
+          if (data?.user) {
+            const profile = {
+              firstName: data.user.user_metadata?.first_name || email.split('@')[0] || 'Jonathan',
+              lastName: data.user.user_metadata?.last_name || ''
+            };
+            setSuccessMsg(`¡Bienvenido de vuelta, ${profile.firstName}!`);
+            setTimeout(() => {
+              onAuthSuccess && onAuthSuccess(data.user, profile);
+              onClose();
+            }, 800);
+          }
+        } else {
+          const profile = {
+            firstName: firstName.trim(),
+            lastName: lastName.trim()
+          };
+          const data = await signUpWithEmail(email, password, {
+            first_name: profile.firstName,
+            last_name: profile.lastName
+          });
+          if (data?.user) {
+            setSuccessMsg(`¡Cuenta creada con éxito! Bienvenido, ${profile.firstName}.`);
+            setTimeout(() => {
+              onAuthSuccess && onAuthSuccess(data.user, profile);
+              onClose();
+            }, 900);
+          }
         }
       } else {
-        const data = await signUpWithEmail(email, password);
-        if (data?.user) {
-          if (data.session) {
-            setSuccessMsg('¡Cuenta creada e iniciada con éxito! Tus datos ahora son privados.');
+        // Modo Local Autónomo (Sin requerir nube obligatoria)
+        let localUsers = [];
+        try {
+          localUsers = JSON.parse(localStorage.getItem('saveahorro_local_users') || '[]');
+        } catch (e) {}
+
+        const normalizedEmail = email.trim().toLowerCase();
+
+        if (mode === 'login') {
+          const existingUser = localUsers.find(u => u.email === normalizedEmail);
+          if (existingUser) {
+            if (existingUser.password !== password) {
+              setErrorMsg('Contraseña incorrecta. Por favor verifica e intenta de nuevo.');
+              setLoading(false);
+              return;
+            }
+            const profile = {
+              firstName: existingUser.firstName || 'Jonathan',
+              lastName: existingUser.lastName || ''
+            };
+            const userObj = {
+              id: existingUser.id,
+              email: existingUser.email,
+              user_metadata: profile
+            };
+            setSuccessMsg(`¡Bienvenido de vuelta, ${profile.firstName}!`);
             setTimeout(() => {
-              onAuthSuccess && onAuthSuccess(data.user);
+              onAuthSuccess && onAuthSuccess(userObj, profile);
               onClose();
-            }, 1000);
+            }, 800);
           } else {
-            setSuccessMsg('¡Cuenta registrada! Si tienes confirmación de correo activa en Supabase, revisa tu bandeja de entrada para verificar.');
+            // Usuario no encontrado en lista local: crear sesión rápida
+            const profile = {
+              firstName: email.split('@')[0] || 'Jonathan',
+              lastName: ''
+            };
+            const userObj = {
+              id: 'local_usr_' + Date.now(),
+              email: normalizedEmail,
+              user_metadata: profile
+            };
+            localUsers.push({
+              id: userObj.id,
+              email: normalizedEmail,
+              password: password,
+              firstName: profile.firstName,
+              lastName: ''
+            });
+            localStorage.setItem('saveahorro_local_users', JSON.stringify(localUsers));
+            setSuccessMsg(`¡Sesión iniciada con éxito!`);
+            setTimeout(() => {
+              onAuthSuccess && onAuthSuccess(userObj, profile);
+              onClose();
+            }, 800);
           }
+        } else {
+          // Registrar nuevo usuario local
+          const profile = {
+            firstName: firstName.trim(),
+            lastName: lastName.trim()
+          };
+          const userObj = {
+            id: 'local_usr_' + Date.now(),
+            email: normalizedEmail,
+            user_metadata: profile
+          };
+          localUsers = localUsers.filter(u => u.email !== normalizedEmail);
+          localUsers.push({
+            id: userObj.id,
+            email: normalizedEmail,
+            password: password,
+            firstName: profile.firstName,
+            lastName: profile.lastName
+          });
+          localStorage.setItem('saveahorro_local_users', JSON.stringify(localUsers));
+
+          setSuccessMsg(`¡Cuenta creada con éxito! Bienvenido, ${profile.firstName}.`);
+          setTimeout(() => {
+            onAuthSuccess && onAuthSuccess(userObj, profile);
+            onClose();
+          }, 900);
         }
       }
     } catch (err) {
@@ -196,6 +298,38 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
 
         {/* Form */}
         <form onSubmit={handleSubmit}>
+          {mode === 'register' && (
+            <div className="grid-2" style={{ marginBottom: '1rem', gap: '0.65rem' }}>
+              <div>
+                <label className="form-label" style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <User size={13} color="var(--primary)" />
+                  <span>Tu Nombre</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: Jonathan"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  className="form-input"
+                  required
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="form-label" style={{ fontSize: '0.8rem' }}>
+                  <span>Apellidos</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: Figueroa"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="form-input"
+                />
+              </div>
+            </div>
+          )}
+
           <div style={{ marginBottom: '1rem' }}>
             <label className="form-label" style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               <Mail size={13} color="var(--primary)" />

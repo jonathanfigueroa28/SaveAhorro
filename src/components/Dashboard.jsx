@@ -476,7 +476,7 @@ export default function Dashboard({
       </div>
 
       {/* Cuentas & Ahorro Direct Access Banner */}
-      <div className="glass-card" style={{
+      <div id="tour-accounts-banner" className="glass-card" style={{
         padding: '0.85rem 1.15rem',
         marginBottom: '1.25rem',
         display: 'flex',
@@ -604,7 +604,7 @@ export default function Dashboard({
         </div>
 
         {/* Budget Remaining Card */}
-        <div className="glass-card" style={{ padding: '1.15rem' }}>
+        <div id="tour-budget-card" className="glass-card" style={{ padding: '1.15rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
             <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
               Presupuesto Mensual (S/)

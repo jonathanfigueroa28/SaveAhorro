@@ -240,7 +240,7 @@ export default function ExpenseForm({
         </div>
 
         {/* Quick Presets for "Gastos Hormiga" (Desplegable / Colapsable) */}
-        <div style={{
+        <div id="tour-quick-presets" style={{
           marginBottom: '1rem',
           background: 'rgba(245, 158, 11, 0.04)',
           borderRadius: 'var(--radius-md)',
@@ -298,7 +298,7 @@ export default function ExpenseForm({
 
         <form onSubmit={handleSubmit}>
           {/* Amount Field (Highlighted) */}
-          <div className="form-group" style={{ marginBottom: '1rem' }}>
+          <div id="tour-amount-section" className="form-group" style={{ marginBottom: '1rem' }}>
             <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
               <span>Monto ({formCurrency === 'USD' ? '$ USD' : 'S/ PEN'})</span>
               <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
@@ -413,7 +413,7 @@ export default function ExpenseForm({
           </div>
 
           {/* Collapsible Button: "Más detalles (Opcional)" */}
-          <div style={{ marginBottom: '1.25rem' }}>
+          <div id="tour-payment-methods" style={{ marginBottom: '1.25rem' }}>
             <button
               type="button"
               onClick={() => setShowMoreDetails(!showMoreDetails)}

@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Sparkles,
   ArrowRight,
   ArrowLeft,
   X,
-  CheckCircle2,
   Zap,
   CreditCard,
   LayoutDashboard,
   Smile,
-  Compass
+  Wallet,
+  Coins
 } from 'lucide-react';
 
 export default function InteractiveTour({
@@ -21,53 +21,123 @@ export default function InteractiveTour({
   currentDemoProfile
 }) {
   const [currentStep, setCurrentStep] = useState(0);
-
-  if (!isOpen) return null;
+  const [targetRect, setTargetRect] = useState(null);
+  const popoverRef = useRef(null);
 
   const tourSteps = [
     {
-      title: '¡Bienvenido a la Demo de SaveAhorro! 🐜✨',
-      badge: 'Paso 1 de 5 • Registro Rápido',
-      icon: <Zap size={22} color="#f59e0b" />,
+      title: 'Atajos Rápidos de 1 Toque ☕🍵',
+      badge: 'Paso 1 de 5 • Registro Ultrarrápido',
+      icon: <Sparkles size={20} color="#f59e0b" />,
       highlightTab: 'form',
-      description: 'Te guiaremos paso a paso para que veas lo fácil y rápido que es registrar tus gastos y tener el control total de tu dinero.',
-      actionHint: '👇 Mira abajo los atajos rápidos de gastos hormiga peruanos (café, emoliente, combi, menú).'
+      targetId: 'tour-quick-presets',
+      description: '¡No pierdas tiempo escribiendo! Toca cualquiera de estos atajos populares peruanos (café, emoliente, metropolitano, menú criollo). Rellenan el monto y la categoría al instante.',
+      actionHint: '👇 Mira el recuadro resaltado: toca cualquier atajo para probarlo.'
     },
     {
-      title: 'Atajos de 1 Clic para Gastos Hormiga ☕🍵',
-      badge: 'Paso 2 de 5 • Atajos Peruanos',
-      icon: <Sparkles size={22} color="#f59e0b" />,
+      title: 'Monto y Moneda (Soles o Dólares) 🇵🇪💵',
+      badge: 'Paso 2 de 5 • Ingreso de Monto',
+      icon: <Coins size={20} color="#10b981" />,
       highlightTab: 'form',
-      description: 'En lugar de escribir todo a mano, puedes tocar "☕ Café pasado (S/ 3.50)" o "🍵 Emoliente (S/ 2.00)" y el formulario se llenará al instante.',
-      actionHint: '💡 ¡Pruébalo tocando cualquier atajo en la pantalla!'
+      targetId: 'tour-amount-section',
+      description: 'Aquí ves el dinero exacto del gasto. Puedes cambiar entre Soles (S/) y Dólares ($) con un solo toque y el sistema aplicará la tasa de cambio en vivo.',
+      actionHint: '💡 Si pulsaste un atajo rápido, verás que el número ya se escribió solo.'
     },
     {
-      title: 'Vinculado a tu Yape o Efectivo 🟣💵',
-      badge: 'Paso 3 de 5 • Cuentas Reales',
-      icon: <CreditCard size={22} color="#3b82f6" />,
+      title: 'Billeteras y Tarjeta de Crédito 🟣💳',
+      badge: 'Paso 3 de 5 • Saldo Real en Cuentas',
+      icon: <CreditCard size={20} color="#3b82f6" />,
       highlightTab: 'form',
-      description: 'En "Más detalles", elige si pagaste con Yape, Plin, Efectivo o Tarjeta. Se descontará directamente de esa cuenta en tiempo real sin enredos.',
-      actionHint: '💳 Si usas Tarjeta de Crédito, se sumará a la deuda del próximo mes para que nunca te cobren intereses.'
+      targetId: 'tour-payment-methods',
+      description: 'En "Más detalles", elige si pagaste con Yape, Plin, Efectivo o Tarjeta. Al guardarlo, se descuenta automáticamente de tu saldo en ese banco.',
+      actionHint: '💳 Si pagas con Tarjeta de Crédito, se anota para pagarse el siguiente mes y evitar intereses.'
     },
     {
-      title: 'El Dashboard: Tu Termómetro Financiero 📊',
+      title: 'Termómetro de tu Presupuesto Mensual 📊',
       badge: 'Paso 4 de 5 • Dashboard',
-      icon: <LayoutDashboard size={22} color="#10b981" />,
+      icon: <LayoutDashboard size={20} color="#6366f1" />,
       highlightTab: 'dashboard',
-      description: 'Mira la barra de presupuesto mensual y la gráfica de pastel. Te muestra exactamente en qué se va tu plata y si estás en zona segura (verde) o en peligro (rojo).',
-      actionHint: '🔄 Puedes alternar entre Soles (S/) y Dólares ($) con la tasa de cambio Google en vivo arriba.'
+      targetId: 'tour-budget-card',
+      description: 'Esta barra te avisa con colores si estás en zona verde (seguro), ámbar (cuidado) o roja (déficit). Sabrás con precisión cuánto te queda para terminar el mes.',
+      actionHint: '👀 Puedes ajustar tu límite mensual en cualquier momento con el botón "Editar".'
     },
     {
       title: 'El Gran Contraste: Carlos vs. Pepe 🎭',
-      badge: 'Paso 5 de 5 • Conductas Opuestas',
-      icon: <Smile size={22} color="#8b5cf6" />,
+      badge: 'Paso 5 de 5 • Comparación en Vivo',
+      icon: <Smile size={20} color="#8b5cf6" />,
       highlightTab: 'dashboard',
-      description: 'En la barra superior de la demo puedes alternar entre "🐜 Carlos" (controla sus gastos, le sobran S/ 1,850) y "💸 Pepe" (gasta sin control, déficit de S/ 950).',
-      actionHint: '✨ ¡Toca "💸 Pepe" arriba para ver la diferencia de impacto!'
+      targetId: 'tour-persona-switcher',
+      description: 'Mira la diferencia arriba: "🐜 Carlos" cuida sus gastos hormiga y le sobra dinero; "💸 Pepe" gasta en antojitos y su tarjeta de crédito lo asfixia a fin de mes.',
+      actionHint: '✨ ¡Toca "💸 Pepe (En Déficit)" en la barra superior para ver el impacto!'
     }
   ];
 
   const step = tourSteps[currentStep];
+
+  // Auto navigate tab and calculate bounding box of the active target
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Navigate to required tab if not already on it
+    if (step.highlightTab && activeTab !== step.highlightTab && onNavigateTab) {
+      onNavigateTab(step.highlightTab);
+    }
+
+    let retryTimer = null;
+    const updatePosition = () => {
+      const el = document.getElementById(step.targetId);
+      if (el) {
+        // Scroll element smoothly into the viewport center
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Wait briefly for smooth scroll animation to settle
+        setTimeout(() => {
+          const rect = el.getBoundingClientRect();
+          setTargetRect({
+            top: rect.top,
+            left: rect.left,
+            width: rect.width,
+            height: rect.height,
+            bottom: rect.bottom,
+            right: rect.right
+          });
+        }, 120);
+      } else {
+        // Retry shortly if view is still mounting
+        retryTimer = setTimeout(updatePosition, 100);
+      }
+    };
+
+    // Initial update with small grace period for tab mount
+    const timer = setTimeout(updatePosition, 140);
+
+    const handleScrollOrResize = () => {
+      const el = document.getElementById(step.targetId);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        setTargetRect({
+          top: rect.top,
+          left: rect.left,
+          width: rect.width,
+          height: rect.height,
+          bottom: rect.bottom,
+          right: rect.right
+        });
+      }
+    };
+
+    window.addEventListener('resize', handleScrollOrResize, { passive: true });
+    window.addEventListener('scroll', handleScrollOrResize, { passive: true });
+
+    return () => {
+      clearTimeout(timer);
+      if (retryTimer) clearTimeout(retryTimer);
+      window.removeEventListener('resize', handleScrollOrResize);
+      window.removeEventListener('scroll', handleScrollOrResize);
+    };
+  }, [currentStep, isOpen, activeTab, step.highlightTab, step.targetId]);
+
+  if (!isOpen) return null;
 
   const handleNext = () => {
     if (currentStep < tourSteps.length - 1) {
@@ -91,25 +161,118 @@ export default function InteractiveTour({
     }
   };
 
+  // Compute smart popover coordinates to never block the target element
+  const windowWidth = typeof window !== 'undefined' ? window.innerWidth : 800;
+  const windowHeight = typeof window !== 'undefined' ? window.innerHeight : 700;
+  const isMobile = windowWidth < 640;
+
+  let popoverTop = windowHeight - 260;
+  let popoverLeft = Math.max(16, (windowWidth - 420) / 2);
+  let showAbove = false;
+
+  if (targetRect) {
+    const spaceAbove = targetRect.top;
+    const spaceBelow = windowHeight - targetRect.bottom;
+    const estimatedPopoverHeight = 240;
+
+    // Decide if popover should sit above or below the target box
+    if (spaceAbove > estimatedPopoverHeight + 20) {
+      showAbove = true;
+      popoverTop = Math.max(16, targetRect.top - estimatedPopoverHeight - 16);
+    } else {
+      showAbove = false;
+      popoverTop = Math.min(windowHeight - estimatedPopoverHeight - 16, targetRect.bottom + 16);
+    }
+
+    if (isMobile) {
+      popoverLeft = 14;
+    } else {
+      const targetCenter = targetRect.left + (targetRect.width / 2);
+      popoverLeft = Math.max(16, Math.min(windowWidth - 436, targetCenter - 210));
+    }
+  }
+
   return (
-    <div style={{
-      position: 'fixed',
-      bottom: '1.5rem',
-      right: '1.5rem',
-      left: '1.5rem',
-      maxWidth: '460px',
-      margin: '0 auto',
-      zIndex: 1500
-    }}>
-      <div className="glass-card animate-fade-in" style={{
-        background: 'rgba(15, 23, 42, 0.95)',
-        border: '2px solid var(--primary)',
-        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(99, 102, 241, 0.3)',
-        borderRadius: 'var(--radius-lg)',
-        padding: '1.25rem',
-        position: 'relative'
-      }}>
-        {/* Close / Skip button */}
+    <div style={{ position: 'fixed', inset: 0, zIndex: 2000, pointerEvents: 'auto' }}>
+      
+      {/* 1. SPOTLIGHT GLOWING HIGHLIGHT FRAME (Surrounds target with dark backdrop) */}
+      {targetRect && (
+        <div
+          className="tour-spotlight-box"
+          style={{
+            position: 'fixed',
+            top: targetRect.top - 6,
+            left: targetRect.left - 6,
+            width: targetRect.width + 12,
+            height: targetRect.height + 12,
+            borderRadius: '14px',
+            border: '2px solid #f59e0b',
+            pointerEvents: 'none',
+            zIndex: 2010,
+            transition: 'top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease'
+          }}
+        >
+          {/* Animated Pin Marker: "👇 AQUÍ" */}
+          <div style={{
+            position: 'absolute',
+            top: showAbove ? 'auto' : '-16px',
+            bottom: showAbove ? '-16px' : 'auto',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: '#f59e0b',
+            color: '#000',
+            borderRadius: '999px',
+            padding: '2px 9px',
+            fontWeight: 900,
+            fontSize: '0.72rem',
+            boxShadow: '0 2px 10px rgba(245, 158, 11, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px',
+            whiteSpace: 'nowrap'
+          }}>
+            {showAbove ? '👆 AQUÍ' : '👇 AQUÍ'}
+          </div>
+        </div>
+      )}
+
+      {/* 2. DYNAMIC FLOATING COACHMARK POPOVER */}
+      <div
+        ref={popoverRef}
+        className="glass-card animate-fade-in"
+        style={{
+          position: 'fixed',
+          top: `${popoverTop}px`,
+          left: isMobile ? '14px' : `${popoverLeft}px`,
+          right: isMobile ? '14px' : 'auto',
+          maxWidth: isMobile ? 'calc(100vw - 28px)' : '420px',
+          background: 'rgba(15, 23, 42, 0.97)',
+          border: '2px solid var(--primary)',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.75), 0 0 25px rgba(99, 102, 241, 0.4)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '1.25rem 1.25rem 1rem 1.25rem',
+          zIndex: 2020,
+          transition: 'top 0.25s ease, left 0.25s ease'
+        }}
+      >
+        {/* Floating Caret Arrow pointing to target */}
+        {targetRect && (
+          <div style={{
+            position: 'absolute',
+            left: isMobile ? '50%' : '30px',
+            transform: 'translateX(-50%)',
+            top: showAbove ? 'auto' : '-10px',
+            bottom: showAbove ? '-10px' : 'auto',
+            width: 0,
+            height: 0,
+            borderLeft: '10px solid transparent',
+            borderRight: '10px solid transparent',
+            borderTop: showAbove ? '10px solid var(--primary)' : 'none',
+            borderBottom: showAbove ? 'none' : '10px solid var(--primary)'
+          }} />
+        )}
+
+        {/* Close Button */}
         <button
           onClick={onClose}
           style={{
@@ -128,54 +291,65 @@ export default function InteractiveTour({
             cursor: 'pointer'
           }}
           title="Saltar tutorial"
+          aria-label="Cerrar tour"
         >
           <X size={15} />
         </button>
 
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.65rem' }}>
+        {/* Step Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.5rem', paddingRight: '2rem' }}>
           <div style={{
-            width: '36px',
-            height: '36px',
+            width: '34px',
+            height: '34px',
             borderRadius: 'var(--radius-md)',
-            background: 'rgba(99, 102, 241, 0.15)',
+            background: 'rgba(99, 102, 241, 0.18)',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            flexShrink: 0
           }}>
             {step.icon}
           </div>
           <div>
-            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {step.badge}
             </span>
-            <h4 style={{ fontSize: '1.05rem', fontWeight: 800, lineHeight: '1.2', color: '#fff' }}>
+            <h4 style={{ fontSize: '1rem', fontWeight: 800, lineHeight: '1.2', color: '#fff' }}>
               {step.title}
             </h4>
           </div>
         </div>
 
-        {/* Body */}
+        {/* Body Description */}
         <p style={{ fontSize: '0.82rem', color: '#e2e8f0', lineHeight: '1.45', marginBottom: '0.65rem' }}>
           {step.description}
         </p>
 
-        {/* Action hint banner */}
+        {/* Action Hint Banner */}
         <div style={{
-          background: 'rgba(245, 158, 11, 0.1)',
+          background: 'rgba(245, 158, 11, 0.12)',
           borderLeft: '3px solid #f59e0b',
           borderRadius: '4px',
-          padding: '0.45rem 0.65rem',
-          fontSize: '0.76rem',
+          padding: '0.4rem 0.65rem',
+          fontSize: '0.75rem',
           color: '#fef08a',
-          marginBottom: '1rem'
+          marginBottom: '0.85rem'
         }}>
           {step.actionHint}
         </div>
 
-        {/* Dots + Navigation Footer */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '0.5rem', borderTop: '1px solid var(--border-color)' }}>
-          <div style={{ display: 'flex', gap: '4px' }}>
+        {/* Footer: Progress Dots & Next/Prev Navigation */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingTop: '0.5rem',
+          borderTop: '1px solid var(--border-color)',
+          flexWrap: 'wrap',
+          gap: '0.5rem'
+        }}>
+          {/* Progress dots */}
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
             {tourSteps.map((_, i) => (
               <div
                 key={i}
@@ -189,7 +363,7 @@ export default function InteractiveTour({
                   width: currentStep === i ? '18px' : '6px',
                   height: '6px',
                   borderRadius: '3px',
-                  background: currentStep === i ? 'var(--primary)' : 'rgba(255,255,255,0.2)',
+                  background: currentStep === i ? '#f59e0b' : 'rgba(255,255,255,0.2)',
                   transition: 'all 0.2s ease',
                   cursor: 'pointer'
                 }}
@@ -210,7 +384,7 @@ export default function InteractiveTour({
                 padding: '0.35rem 0.55rem'
               }}
             >
-              Saltar tour
+              Saltar
             </button>
 
             {currentStep > 0 && (
@@ -219,6 +393,7 @@ export default function InteractiveTour({
                 onClick={handlePrev}
                 className="btn btn-secondary"
                 style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem' }}
+                title="Paso anterior"
               >
                 <ArrowLeft size={13} />
               </button>
@@ -227,14 +402,22 @@ export default function InteractiveTour({
             <button
               type="button"
               onClick={handleNext}
-              className="btn btn-primary"
-              style={{ padding: '0.35rem 0.85rem', fontSize: '0.75rem', fontWeight: 700 }}
+              className="btn btn-ant"
+              style={{
+                padding: '0.35rem 0.85rem',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem'
+              }}
             >
-              <span>{currentStep < tourSteps.length - 1 ? 'Siguiente' : '¡Listo!'}</span>
+              <span>{currentStep < tourSteps.length - 1 ? 'Siguiente' : '¡Comenzar!'}</span>
               <ArrowRight size={13} />
             </button>
           </div>
         </div>
+
       </div>
     </div>
   );
