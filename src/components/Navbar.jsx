@@ -219,6 +219,13 @@ export default function Navbar({
           <span>+ Registrar Gasto</span>
         </button>
         <button
+          className={`tab-btn ${activeTab === 'liquidity' ? 'active' : ''}`}
+          onClick={() => setActiveTab('liquidity')}
+        >
+          <Wallet size={18} />
+          <span>Cuentas & Ahorro</span>
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
           onClick={() => setActiveTab('dashboard')}
         >

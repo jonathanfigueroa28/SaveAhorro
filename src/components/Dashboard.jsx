@@ -30,7 +30,9 @@ import {
   RefreshCw,
   ArrowRightLeft,
   Coins,
-  Layers
+  Layers,
+  Wallet,
+  ArrowRight
 } from 'lucide-react';
 
 ChartJS.register(
@@ -54,7 +56,9 @@ export default function Dashboard({
   onCurrencyChange,
   exchangeRate = 3.75,
   exchangeUpdatedAt = '',
-  onRefreshExchangeRate
+  onRefreshExchangeRate,
+  onNavigateTab,
+  accounts = []
 }) {
   const [timeFilter, setTimeFilter] = useState('this_month'); // 'this_month', 'last_30', 'all'
   const [currencyMode, setCurrencyMode] = useState('consolidated'); // 'PEN', 'USD', 'consolidated'
@@ -468,6 +472,56 @@ export default function Dashboard({
               </button>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Cuentas & Ahorro Direct Access Banner */}
+      <div className="glass-card" style={{
+        padding: '0.85rem 1.15rem',
+        marginBottom: '1.25rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '0.75rem',
+        background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(16, 185, 129, 0.08) 100%)',
+        border: '1px solid rgba(99, 102, 241, 0.25)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <div style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: 'var(--radius-sm)',
+            background: 'rgba(99, 102, 241, 0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--primary)',
+            flexShrink: 0
+          }}>
+            <Wallet size={19} />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)' }}>
+              🏦 Tus Cuentas, Ahorros y Tarjetas
+            </div>
+            <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', margin: 0 }}>
+              {accounts.length > 0 
+                ? `${accounts.length} cuentas vinculadas (Yape, Plin, BCP, BBVA, Efectivo)`
+                : 'Monitorea tu saldo real, billeteras y tus ahorros intocables'}
+            </p>
+          </div>
+        </div>
+
+        {onNavigateTab && (
+          <button
+            onClick={() => onNavigateTab('liquidity')}
+            className="btn btn-primary"
+            style={{ padding: '0.4rem 0.85rem', fontSize: '0.78rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+          >
+            <span>Ver Cuentas & Ahorro</span>
+            <ArrowRight size={13} />
+          </button>
         )}
       </div>
 

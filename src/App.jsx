@@ -29,7 +29,7 @@ import {
   fetchIncomes,
   fetchFixedExpenses
 } from './lib/supabaseClient';
-import { PlusCircle, LayoutDashboard, ListFilter, Cloud, Sparkles, ArrowRight, ArrowLeft } from 'lucide-react';
+import { PlusCircle, LayoutDashboard, ListFilter, Cloud, Sparkles, ArrowRight, ArrowLeft, Wallet } from 'lucide-react';
 
 export default function App() {
   // Navigation mode: 'landing', 'app' (real user), or 'demo' (interactive test)
@@ -39,6 +39,9 @@ export default function App() {
 
   const [demoProfileKey, setDemoProfileKey] = useState('carlos'); // 'carlos' or 'pepe'
   const [demoExpenses, setDemoExpenses] = useState(DEMO_PROFILES.carlos.expenses);
+  const [demoAccounts, setDemoAccounts] = useState(DEMO_PROFILES.carlos.accounts || []);
+  const [demoIncomes, setDemoIncomes] = useState(DEMO_PROFILES.carlos.incomes || []);
+  const [demoFixedExpenses, setDemoFixedExpenses] = useState(DEMO_PROFILES.carlos.fixedExpenses || []);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [isTourOpen, setIsTourOpen] = useState(false);
 
@@ -70,11 +73,14 @@ export default function App() {
   const [cloudEnabled, setCloudEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Sync demo expenses whenever demo profile changes
+  // Sync demo state whenever demo profile changes
   useEffect(() => {
     if (viewMode === 'demo') {
       const p = DEMO_PROFILES[demoProfileKey] || DEMO_PROFILES.carlos;
       setDemoExpenses([...p.expenses]);
+      setDemoAccounts([...(p.accounts || [])]);
+      setDemoIncomes([...(p.incomes || [])]);
+      setDemoFixedExpenses([...(p.fixedExpenses || [])]);
     }
   }, [demoProfileKey, viewMode]);
 
@@ -216,9 +222,35 @@ export default function App() {
   const activeDemoProfile = DEMO_PROFILES[demoProfileKey] || DEMO_PROFILES.carlos;
 
   const currentExpenses = isDemo ? demoExpenses : expenses;
-  const currentAccounts = isDemo ? activeDemoProfile.accounts : accounts;
+  const currentAccounts = isDemo ? demoAccounts : accounts;
+  const currentIncomes = isDemo ? demoIncomes : incomes;
+  const currentFixedExpenses = isDemo ? demoFixedExpenses : fixedExpenses;
   const currentBudget = isDemo ? activeDemoProfile.monthlyBudget : monthlyBudget;
   const currentDisplayedProfile = isDemo ? activeDemoProfile.userProfile : userProfile;
+
+  const handleAccountsChange = (updated) => {
+    if (isDemo) {
+      setDemoAccounts(updated);
+    } else {
+      setAccounts(updated);
+    }
+  };
+
+  const handleIncomesChange = (updated) => {
+    if (isDemo) {
+      setDemoIncomes(updated);
+    } else {
+      setIncomes(updated);
+    }
+  };
+
+  const handleFixedExpensesChange = (updated) => {
+    if (isDemo) {
+      setDemoFixedExpenses(updated);
+    } else {
+      setFixedExpenses(updated);
+    }
+  };
 
   // VIEW 1: LANDING PAGE
   if (viewMode === 'landing') {
@@ -364,6 +396,20 @@ export default function App() {
               />
             )}
 
+            {activeTab === 'liquidity' && (
+              <LiquidityManager
+                expenses={currentExpenses}
+                accounts={currentAccounts}
+                onAccountsChange={handleAccountsChange}
+                incomes={currentIncomes}
+                onIncomesChange={handleIncomesChange}
+                fixedExpenses={currentFixedExpenses}
+                onFixedExpensesChange={handleFixedExpensesChange}
+                exchangeRate={exchangeRate}
+                currentCurrency={currency}
+              />
+            )}
+
             {activeTab === 'dashboard' && (
               <Dashboard
                 expenses={currentExpenses}
@@ -374,6 +420,8 @@ export default function App() {
                 exchangeRate={exchangeRate}
                 exchangeUpdatedAt={exchangeUpdatedAt}
                 onRefreshExchangeRate={() => loadExchangeRate(true)}
+                onNavigateTab={(tab) => setActiveTab(tab)}
+                accounts={currentAccounts}
               />
             )}
 
@@ -399,6 +447,13 @@ export default function App() {
         >
           <PlusCircle size={20} />
           <span>Registrar</span>
+        </button>
+        <button
+          className={`mobile-nav-item ${activeTab === 'liquidity' ? 'active' : ''}`}
+          onClick={() => setActiveTab('liquidity')}
+        >
+          <Wallet size={20} />
+          <span>Cuentas</span>
         </button>
         <button
           className={`mobile-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
