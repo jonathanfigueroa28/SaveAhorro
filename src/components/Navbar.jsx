@@ -12,7 +12,9 @@ export default function Navbar({
   exchangeRate,
   onRefreshExchangeRate,
   userProfile,
-  onOpenProfileModal
+  onOpenProfileModal,
+  onOpenTutorial,
+  onShowLanding
 }) {
   return (
     <header style={{ marginBottom: '1.25rem' }}>
@@ -81,6 +83,31 @@ export default function Navbar({
                 Hola, {userProfile?.firstName || 'Jonathan'} 👋
               </span>
             </button>
+
+            {/* Tutorial Button */}
+            {onOpenTutorial && (
+              <button
+                onClick={onOpenTutorial}
+                className="btn btn-secondary"
+                style={{ padding: '0.45rem 0.65rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                title="Ver el tutorial guiado de 3 pasos"
+              >
+                <Sparkles size={14} color="#f59e0b" />
+                <span className="hide-mobile">Tutorial</span>
+              </button>
+            )}
+
+            {/* Landing / Demo toggle button */}
+            {onShowLanding && (
+              <button
+                onClick={onShowLanding}
+                className="btn btn-secondary"
+                style={{ padding: '0.45rem 0.65rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                title="Ver presentación y demos interactivas"
+              >
+                <span>🎭 Demos</span>
+              </button>
+            )}
 
             {/* Cloud config button */}
             <button

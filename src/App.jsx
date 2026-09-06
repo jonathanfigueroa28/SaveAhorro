@@ -7,6 +7,9 @@ import LiquidityManager from './components/LiquidityManager';
 import CloudConfigModal from './components/CloudConfigModal';
 import AuthModal from './components/AuthModal';
 import UserProfileModal from './components/UserProfileModal';
+import LandingPage from './components/LandingPage';
+import GuidedTutorialModal from './components/GuidedTutorialModal';
+import { DEMO_PROFILES } from './lib/demoData';
 import {
   fetchExpenses,
   saveExpense,
@@ -25,16 +28,25 @@ import {
   fetchIncomes,
   fetchFixedExpenses
 } from './lib/supabaseClient';
-import { PlusCircle, LayoutDashboard, ListFilter, Cloud } from 'lucide-react';
+import { PlusCircle, LayoutDashboard, ListFilter, Cloud, Sparkles, ArrowRight, ArrowLeft } from 'lucide-react';
 
 export default function App() {
+  // Navigation mode: 'landing', 'app' (real user), or 'demo' (interactive test)
+  const [viewMode, setViewMode] = useState(() => {
+    return localStorage.getItem('saveahorro_view_mode') || 'landing';
+  });
+
+  const [demoProfileKey, setDemoProfileKey] = useState('carlos'); // 'carlos' or 'pepe'
+  const [demoExpenses, setDemoExpenses] = useState(DEMO_PROFILES.carlos.expenses);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+
   const [activeTab, setActiveTab] = useState('form');
   const [expenses, setExpenses] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [incomes, setIncomes] = useState([]);
   const [fixedExpenses, setFixedExpenses] = useState([]);
   
-  // User profile state (simple name/surname personalization)
+  // Real user profile state
   const [userProfile, setUserProfile] = useState(() => {
     try {
       const saved = localStorage.getItem('saveahorro_user_profile');
@@ -44,7 +56,7 @@ export default function App() {
   });
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-  // Supabase Auth kept intact in standby for development
+  // Supabase Auth kept intact in standby
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   
@@ -55,6 +67,14 @@ export default function App() {
   const [isCloudConfigOpen, setIsCloudConfigOpen] = useState(false);
   const [cloudEnabled, setCloudEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Sync demo expenses whenever demo profile changes
+  useEffect(() => {
+    if (viewMode === 'demo') {
+      const p = DEMO_PROFILES[demoProfileKey] || DEMO_PROFILES.carlos;
+      setDemoExpenses([...p.expenses]);
+    }
+  }, [demoProfileKey, viewMode]);
 
   const handleSaveProfile = (newProfile) => {
     setUserProfile(newProfile);
@@ -103,7 +123,6 @@ export default function App() {
     loadData();
     loadExchangeRate();
 
-    // Subscribe to auth state changes (persisted in standby)
     const subscription = onAuthStateChange(async (event, user) => {
       setCurrentUser(user);
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
@@ -127,7 +146,17 @@ export default function App() {
     setCurrency(newCur);
   };
 
+  // Expense Handlers (Dispatches to real state or demo state)
   const handleAddExpense = async (expenseData) => {
+    if (viewMode === 'demo') {
+      const newDemoExpense = {
+        ...expenseData,
+        id: 'demo_exp_' + Date.now()
+      };
+      setDemoExpenses(prev => [newDemoExpense, ...prev]);
+      return { expense: newDemoExpense, isCloudEnabled: false };
+    }
+
     const result = await saveExpense(expenseData);
     const saved = result.expense || result;
     setExpenses(prev => [saved, ...prev.filter(e => e.id !== saved.id)]);
@@ -135,6 +164,11 @@ export default function App() {
   };
 
   const handleUpdateExpense = async (id, updatedFields) => {
+    if (viewMode === 'demo') {
+      setDemoExpenses(prev => prev.map(e => e.id === id ? { ...e, ...updatedFields } : e));
+      return { expense: { id, ...updatedFields } };
+    }
+
     const result = await updateExpense(id, updatedFields);
     const updated = result.expense || { id, ...updatedFields };
     setExpenses(prev => prev.map(e => (e.id === id ? { ...e, ...updated } : e)));
@@ -142,36 +176,169 @@ export default function App() {
   };
 
   const handleDeleteExpense = async (id) => {
+    if (viewMode === 'demo') {
+      setDemoExpenses(prev => prev.filter(e => e.id !== id));
+      return;
+    }
+
     await deleteExpense(id);
     setExpenses(prev => prev.filter(e => e.id !== id));
   };
 
   const handleUpdateBudget = (newBudget) => {
+    if (viewMode === 'demo') return;
     saveMonthlyBudget(newBudget);
     setMonthlyBudgetState(newBudget);
   };
 
+  const handleStartDemo = (profileKey = 'carlos') => {
+    setDemoProfileKey(profileKey);
+    setViewMode('demo');
+    setActiveTab('dashboard'); // Jump right into dashboard to impress the user!
+  };
+
+  const handleEnterRealApp = () => {
+    setViewMode('app');
+    localStorage.setItem('saveahorro_view_mode', 'app');
+  };
+
+  // Active data selection
+  const isDemo = viewMode === 'demo';
+  const activeDemoProfile = DEMO_PROFILES[demoProfileKey] || DEMO_PROFILES.carlos;
+
+  const currentExpenses = isDemo ? demoExpenses : expenses;
+  const currentAccounts = isDemo ? activeDemoProfile.accounts : accounts;
+  const currentBudget = isDemo ? activeDemoProfile.monthlyBudget : monthlyBudget;
+  const currentDisplayedProfile = isDemo ? activeDemoProfile.userProfile : userProfile;
+
+  // VIEW 1: LANDING PAGE
+  if (viewMode === 'landing') {
+    return (
+      <div className="app-container">
+        <LandingPage
+          onStartDemo={handleStartDemo}
+          onEnterApp={handleEnterRealApp}
+          onOpenTutorial={() => setIsTutorialOpen(true)}
+        />
+
+        <GuidedTutorialModal
+          isOpen={isTutorialOpen}
+          onClose={() => setIsTutorialOpen(false)}
+        />
+      </div>
+    );
+  }
+
+  // VIEW 2 & 3: APPLICATION (REAL O DEMO INTERACTIVA)
   return (
     <div className="app-container">
       
+      {/* DEMO MODE STICKY TOP BANNER */}
+      {isDemo && (
+        <div className="demo-banner animate-fade-in">
+          <div className="demo-banner-top">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+              <span style={{
+                fontSize: '0.74rem',
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                padding: '0.2rem 0.55rem',
+                borderRadius: 'var(--radius-sm)',
+                background: 'rgba(245, 158, 11, 0.2)',
+                color: '#fef08a',
+                border: '1px solid rgba(245, 158, 11, 0.4)'
+              }}>
+                🎭 MODO DEMO INTERACTIVO
+              </span>
+
+              {/* Persona Switcher Buttons */}
+              <div className="demo-profile-pills">
+                <button
+                  type="button"
+                  onClick={() => setDemoProfileKey('carlos')}
+                  className="demo-pill"
+                  style={{
+                    background: demoProfileKey === 'carlos' ? '#10b981' : 'transparent',
+                    color: demoProfileKey === 'carlos' ? '#fff' : 'var(--text-muted)'
+                  }}
+                >
+                  <span>🐜 Carlos (Ahorrador 🟢)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDemoProfileKey('pepe')}
+                  className="demo-pill"
+                  style={{
+                    background: demoProfileKey === 'pepe' ? '#ef4444' : 'transparent',
+                    color: demoProfileKey === 'pepe' ? '#fff' : 'var(--text-muted)'
+                  }}
+                >
+                  <span>💸 Pepe (En Déficit 🔴)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setIsTutorialOpen(true)}
+                className="btn btn-secondary"
+                style={{ padding: '0.35rem 0.7rem', fontSize: '0.75rem', gap: '0.3rem' }}
+              >
+                <Sparkles size={13} color="#f59e0b" />
+                <span>Tutorial</span>
+              </button>
+              <button
+                onClick={handleEnterRealApp}
+                className="btn btn-primary"
+                style={{ padding: '0.35rem 0.85rem', fontSize: '0.75rem', fontWeight: 700, gap: '0.3rem' }}
+              >
+                <span>✨ Ir a Mi Cuenta</span>
+                <ArrowRight size={13} />
+              </button>
+              <button
+                onClick={() => setViewMode('landing')}
+                className="btn btn-secondary"
+                style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem' }}
+                title="Volver a la portada principal"
+              >
+                <span>🏠 Inicio</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Subtitle tag explaining the active persona */}
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <span>Viendo a:</span>
+            <strong style={{ color: demoProfileKey === 'carlos' ? '#10b981' : '#fca5a5' }}>
+              {activeDemoProfile.fullName} ({activeDemoProfile.nickname}) {activeDemoProfile.emoji}
+            </strong>
+            <span>— {activeDemoProfile.tagline}</span>
+          </div>
+        </div>
+      )}
+
       {/* Top Navbar */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         cloudEnabled={cloudEnabled}
         onOpenCloudConfig={() => setIsCloudConfigOpen(true)}
-        monthlyBudget={monthlyBudget}
+        monthlyBudget={currentBudget}
         currentCurrency={currency}
         onCurrencyChange={handleCurrencyChange}
         exchangeRate={exchangeRate}
         onRefreshExchangeRate={() => loadExchangeRate(true)}
-        userProfile={userProfile}
-        onOpenProfileModal={() => setIsProfileModalOpen(true)}
+        userProfile={currentDisplayedProfile}
+        onOpenProfileModal={() => !isDemo && setIsProfileModalOpen(true)}
+        onOpenTutorial={() => setIsTutorialOpen(true)}
+        onShowLanding={() => setViewMode('landing')}
       />
 
       {/* Main Content Area */}
       <main style={{ marginTop: '1rem' }}>
-        {loading ? (
+        {loading && !isDemo ? (
           <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-muted)' }}>
             <p style={{ fontSize: '1.1rem' }}>Cargando tus datos de SaveAhorro...</p>
           </div>
@@ -182,14 +349,14 @@ export default function App() {
                 onAddExpense={handleAddExpense}
                 currentCurrency={currency}
                 onCurrencyChange={handleCurrencyChange}
-                accounts={accounts}
+                accounts={currentAccounts}
               />
             )}
 
             {activeTab === 'dashboard' && (
               <Dashboard
-                expenses={expenses}
-                monthlyBudget={monthlyBudget}
+                expenses={currentExpenses}
+                monthlyBudget={currentBudget}
                 setMonthlyBudget={handleUpdateBudget}
                 currentCurrency={currency}
                 onCurrencyChange={handleCurrencyChange}
@@ -201,7 +368,7 @@ export default function App() {
 
             {activeTab === 'list' && (
               <ExpenseList
-                expenses={expenses}
+                expenses={currentExpenses}
                 onDeleteExpense={handleDeleteExpense}
                 onUpdateExpense={handleUpdateExpense}
                 currentCurrency={currency}
@@ -209,25 +376,11 @@ export default function App() {
                 exchangeRate={exchangeRate}
               />
             )}
-
-            {activeTab === 'liquidity' && (
-              <LiquidityManager
-                expenses={expenses}
-                accounts={accounts}
-                onAccountsChange={setAccounts}
-                incomes={incomes}
-                onIncomesChange={setIncomes}
-                fixedExpenses={fixedExpenses}
-                onFixedExpensesChange={setFixedExpenses}
-                exchangeRate={exchangeRate}
-                currentCurrency={currency}
-              />
-            )}
           </>
         )}
       </main>
 
-      {/* Mobile Bottom Navigation Bar (Ordered without the briefcase tab) */}
+      {/* Mobile Bottom Navigation Bar */}
       <nav className="mobile-bottom-nav">
         <button
           className={`mobile-nav-item ${activeTab === 'form' ? 'active' : ''}`}
@@ -260,6 +413,12 @@ export default function App() {
         </button>
       </nav>
 
+      {/* Guided Tutorial Modal */}
+      <GuidedTutorialModal
+        isOpen={isTutorialOpen}
+        onClose={() => setIsTutorialOpen(false)}
+      />
+
       {/* User Profile Modal (Nombre y Apellidos) */}
       <UserProfileModal
         isOpen={isProfileModalOpen}
@@ -275,7 +434,7 @@ export default function App() {
         onConfigSaved={loadData}
       />
 
-      {/* Auth Modal (Preserved in standby for future activation) */}
+      {/* Auth Modal (Preserved in standby) */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
