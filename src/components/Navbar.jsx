@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bug, Cloud, CloudOff, PlusCircle, LayoutDashboard, ListFilter, Settings, ArrowRightLeft, RefreshCw, Wallet, User, LogIn, LogOut } from 'lucide-react';
+import { Bug, Cloud, CloudOff, PlusCircle, LayoutDashboard, ListFilter, Settings, ArrowRightLeft, RefreshCw, Wallet, User, LogIn, LogOut, Sparkles } from 'lucide-react';
 
 export default function Navbar({
   activeTab,

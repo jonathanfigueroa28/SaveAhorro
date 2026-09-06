@@ -9,6 +9,7 @@ import AuthModal from './components/AuthModal';
 import UserProfileModal from './components/UserProfileModal';
 import LandingPage from './components/LandingPage';
 import GuidedTutorialModal from './components/GuidedTutorialModal';
+import InteractiveTour from './components/InteractiveTour';
 import { DEMO_PROFILES } from './lib/demoData';
 import {
   fetchExpenses,
@@ -39,6 +40,7 @@ export default function App() {
   const [demoProfileKey, setDemoProfileKey] = useState('carlos'); // 'carlos' or 'pepe'
   const [demoExpenses, setDemoExpenses] = useState(DEMO_PROFILES.carlos.expenses);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+  const [isTourOpen, setIsTourOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState('form');
   const [expenses, setExpenses] = useState([]);
@@ -194,7 +196,8 @@ export default function App() {
   const handleStartDemo = (profileKey = 'carlos') => {
     setDemoProfileKey(profileKey);
     setViewMode('demo');
-    setActiveTab('dashboard'); // Jump right into dashboard to impress the user!
+    setActiveTab('form'); // Empezar en el formulario para guiar el registro de gastos hormiga
+    setIsTourOpen(true);  // Activar el tour interactivo guiado de inmediato
   };
 
   const handleEnterRealApp = () => {
@@ -282,12 +285,13 @@ export default function App() {
             {/* Action buttons */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
               <button
-                onClick={() => setIsTutorialOpen(true)}
+                onClick={() => setIsTourOpen(true)}
                 className="btn btn-secondary"
                 style={{ padding: '0.35rem 0.7rem', fontSize: '0.75rem', gap: '0.3rem' }}
+                title="Abrir la guía interactiva paso a paso"
               >
                 <Sparkles size={13} color="#f59e0b" />
-                <span>Tutorial</span>
+                <span>Tutorial Guiado</span>
               </button>
               <button
                 onClick={handleEnterRealApp}
@@ -332,7 +336,7 @@ export default function App() {
         onRefreshExchangeRate={() => loadExchangeRate(true)}
         userProfile={currentDisplayedProfile}
         onOpenProfileModal={() => !isDemo && setIsProfileModalOpen(true)}
-        onOpenTutorial={() => setIsTutorialOpen(true)}
+        onOpenTutorial={() => setIsTourOpen(true)}
         onShowLanding={() => setViewMode('landing')}
       />
 
@@ -413,10 +417,20 @@ export default function App() {
         </button>
       </nav>
 
-      {/* Guided Tutorial Modal */}
+      {/* Guided Tutorial Modal (Full guide) */}
       <GuidedTutorialModal
         isOpen={isTutorialOpen}
         onClose={() => setIsTutorialOpen(false)}
+      />
+
+      {/* Interactive Tour (Coachmarks step by step inside demo/app) */}
+      <InteractiveTour
+        isOpen={isTourOpen}
+        onClose={() => setIsTourOpen(false)}
+        activeTab={activeTab}
+        onNavigateTab={(tab) => setActiveTab(tab)}
+        onSwitchDemoProfile={(key) => setDemoProfileKey(key)}
+        currentDemoProfile={demoProfileKey}
       />
 
       {/* User Profile Modal (Nombre y Apellidos) */}
