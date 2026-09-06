@@ -6,6 +6,7 @@ import ExpenseList from './components/ExpenseList';
 import LiquidityManager from './components/LiquidityManager';
 import CloudConfigModal from './components/CloudConfigModal';
 import AuthModal from './components/AuthModal';
+import UserProfileModal from './components/UserProfileModal';
 import {
   fetchExpenses,
   saveExpense,
@@ -24,7 +25,7 @@ import {
   fetchIncomes,
   fetchFixedExpenses
 } from './lib/supabaseClient';
-import { PlusCircle, LayoutDashboard, ListFilter, Cloud, Wallet } from 'lucide-react';
+import { PlusCircle, LayoutDashboard, ListFilter, Cloud } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('form');
@@ -32,6 +33,18 @@ export default function App() {
   const [accounts, setAccounts] = useState([]);
   const [incomes, setIncomes] = useState([]);
   const [fixedExpenses, setFixedExpenses] = useState([]);
+  
+  // User profile state (simple name/surname personalization)
+  const [userProfile, setUserProfile] = useState(() => {
+    try {
+      const saved = localStorage.getItem('saveahorro_user_profile');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return { firstName: 'Jonathan', lastName: 'Figueroa' };
+  });
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+
+  // Supabase Auth kept intact in standby for development
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   
@@ -42,6 +55,11 @@ export default function App() {
   const [isCloudConfigOpen, setIsCloudConfigOpen] = useState(false);
   const [cloudEnabled, setCloudEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const handleSaveProfile = (newProfile) => {
+    setUserProfile(newProfile);
+    localStorage.setItem('saveahorro_user_profile', JSON.stringify(newProfile));
+  };
 
   // Load live market exchange rate
   const loadExchangeRate = async (forceRefresh = false) => {
@@ -85,7 +103,7 @@ export default function App() {
     loadData();
     loadExchangeRate();
 
-    // Subscribe to auth state changes (persists login across weeks/reloads)
+    // Subscribe to auth state changes (persisted in standby)
     const subscription = onAuthStateChange(async (event, user) => {
       setCurrentUser(user);
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
@@ -147,9 +165,8 @@ export default function App() {
         onCurrencyChange={handleCurrencyChange}
         exchangeRate={exchangeRate}
         onRefreshExchangeRate={() => loadExchangeRate(true)}
-        currentUser={currentUser}
-        onOpenAuthModal={() => setIsAuthModalOpen(true)}
-        onLogout={handleLogout}
+        userProfile={userProfile}
+        onOpenProfileModal={() => setIsProfileModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -210,7 +227,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Mobile Bottom Navigation Bar */}
+      {/* Mobile Bottom Navigation Bar (Ordered without the briefcase tab) */}
       <nav className="mobile-bottom-nav">
         <button
           className={`mobile-nav-item ${activeTab === 'form' ? 'active' : ''}`}
@@ -234,13 +251,6 @@ export default function App() {
           <span>Historial</span>
         </button>
         <button
-          className={`mobile-nav-item ${activeTab === 'liquidity' ? 'active' : ''}`}
-          onClick={() => setActiveTab('liquidity')}
-        >
-          <Wallet size={20} />
-          <span>Liquidez</span>
-        </button>
-        <button
           className="mobile-nav-item"
           onClick={() => setIsCloudConfigOpen(true)}
           style={{ color: cloudEnabled ? 'var(--success)' : 'var(--text-muted)' }}
@@ -250,6 +260,14 @@ export default function App() {
         </button>
       </nav>
 
+      {/* User Profile Modal (Nombre y Apellidos) */}
+      <UserProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        userProfile={userProfile}
+        onSaveProfile={handleSaveProfile}
+      />
+
       {/* Cloud Configuration Modal */}
       <CloudConfigModal
         isOpen={isCloudConfigOpen}
@@ -257,7 +275,7 @@ export default function App() {
         onConfigSaved={loadData}
       />
 
-      {/* Auth Modal (Login & Registration) */}
+      {/* Auth Modal (Preserved in standby for future activation) */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}

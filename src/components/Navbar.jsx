@@ -11,9 +11,8 @@ export default function Navbar({
   onCurrencyChange,
   exchangeRate,
   onRefreshExchangeRate,
-  currentUser,
-  onOpenAuthModal,
-  onLogout
+  userProfile,
+  onOpenProfileModal
 }) {
   return (
     <header style={{ marginBottom: '1.25rem' }}>
@@ -45,69 +44,43 @@ export default function Navbar({
             </div>
           </div>
 
-          {/* User Auth & Cloud status row */}
+          {/* User Profile & Cloud status row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-            {currentUser ? (
-              <div style={{
+            {/* Friendly Greeting & Name editor */}
+            <button
+              onClick={onOpenProfileModal}
+              style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.4rem',
                 background: 'rgba(99, 102, 241, 0.12)',
-                border: '1px solid rgba(99, 102, 241, 0.25)',
+                border: '1px solid rgba(99, 102, 241, 0.28)',
                 borderRadius: 'var(--radius-md)',
-                padding: '0.35rem 0.65rem'
+                padding: '0.35rem 0.65rem',
+                cursor: 'pointer',
+                color: '#fff',
+                transition: 'all 0.2s ease'
+              }}
+              title="Haz clic para editar tu nombre y apellidos"
+            >
+              <div style={{
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, var(--primary), #8b5cf6)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#fff',
+                fontSize: '0.75rem',
+                fontWeight: 700
               }}>
-                <div style={{
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '50%',
-                  background: 'var(--primary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  fontSize: '0.75rem',
-                  fontWeight: 700
-                }}>
-                  {currentUser.email ? currentUser.email.charAt(0).toUpperCase() : 'U'}
-                </div>
-                <span style={{ fontSize: '0.75rem', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#e0e7ff' }}>
-                  {currentUser.email ? currentUser.email.split('@')[0] : 'Usuario'}
-                </span>
-                <button
-                  onClick={onLogout}
-                  title="Cerrar sesión"
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--text-muted)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '2px',
-                    marginLeft: '2px'
-                  }}
-                >
-                  <LogOut size={14} color="#fca5a5" />
-                </button>
+                {userProfile?.firstName ? userProfile.firstName.charAt(0).toUpperCase() : 'J'}
               </div>
-            ) : (
-              <button
-                onClick={onOpenAuthModal}
-                className="btn btn-primary"
-                style={{
-                  padding: '0.4rem 0.75rem',
-                  fontSize: '0.75rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.35rem'
-                }}
-                title="Iniciar sesión o registrarte"
-              >
-                <LogIn size={14} />
-                <span>Ingresar</span>
-              </button>
-            )}
+              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#e0e7ff' }}>
+                Hola, {userProfile?.firstName || 'Jonathan'} 👋
+              </span>
+            </button>
 
             {/* Cloud config button */}
             <button
@@ -198,13 +171,6 @@ export default function Navbar({
         >
           <ListFilter size={18} />
           <span>Historial de Gastos</span>
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'liquidity' ? 'active' : ''}`}
-          onClick={() => setActiveTab('liquidity')}
-        >
-          <Wallet size={18} />
-          <span>💼 Liquidez & Ahorros</span>
         </button>
       </div>
     </header>
