@@ -24,7 +24,13 @@ import {
   MapPin
 } from 'lucide-react';
 
-export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGORIES, currentCurrency = 'PEN', onCurrencyChange }) {
+export default function ExpenseForm({
+  onAddExpense,
+  categories = DEFAULT_CATEGORIES,
+  currentCurrency = 'PEN',
+  onCurrencyChange,
+  accounts = []
+}) {
   const [formCurrency, setFormCurrency] = useState(currentCurrency);
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('gastos-hormiga');
@@ -32,6 +38,7 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
   const [isAntExpense, setIsAntExpense] = useState(true);
   const [date, setDate] = useState(getLimaNowIso());
   const [paymentMethod, setPaymentMethod] = useState('');
+  const [selectedAccountId, setSelectedAccountId] = useState('');
   const [bank, setBank] = useState('');
   const [place, setPlace] = useState('');
   const [showMoreDetails, setShowMoreDetails] = useState(false);
@@ -70,6 +77,49 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
     }
   };
 
+  const handlePaymentMethodSelect = (pmId) => {
+    const nextPm = paymentMethod === pmId ? '' : pmId;
+    setPaymentMethod(nextPm);
+
+    if (!nextPm) {
+      setSelectedAccountId('');
+      return;
+    }
+
+    // Auto-vincular cuenta según método
+    if (nextPm === 'yape') {
+      const yapeAcc = accounts.find(a => a.type === 'billetera_digital' && (a.name.toLowerCase().includes('yape') || a.id.includes('yape')));
+      if (yapeAcc) {
+        setSelectedAccountId(yapeAcc.id);
+        setBank(yapeAcc.bank || 'BCP');
+      }
+    } else if (nextPm === 'plin') {
+      const plinAcc = accounts.find(a => a.name.toLowerCase().includes('plin') || a.id.includes('plin'));
+      if (plinAcc) {
+        setSelectedAccountId(plinAcc.id);
+        setBank(plinAcc.bank || 'Interbank');
+      }
+    } else if (nextPm === 'efectivo') {
+      const cashAcc = accounts.find(a => a.type === 'efectivo' || a.id.includes('efectivo'));
+      if (cashAcc) {
+        setSelectedAccountId(cashAcc.id);
+        setBank('Efectivo');
+      }
+    } else if (nextPm === 'credito') {
+      const tcAcc = accounts.find(a => a.type === 'tarjeta_credito' || a.id.includes('tc'));
+      if (tcAcc) {
+        setSelectedAccountId(tcAcc.id);
+        setBank(tcAcc.bank || 'BCP');
+      }
+    } else if (nextPm === 'debito') {
+      const debAcc = accounts.find(a => a.type === 'banco' || a.id.includes('debito'));
+      if (debAcc) {
+        setSelectedAccountId(debAcc.id);
+        setBank(debAcc.bank || 'BCP');
+      }
+    }
+  };
+
   const currentPresets = ANT_PRESETS_BY_CURRENCY[formCurrency] || ANT_PRESETS_BY_CURRENCY.PEN;
 
   const handleSubmit = async (e) => {
@@ -83,6 +133,7 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
       description,
       is_ant_expense: isAntExpense,
       payment_method: paymentMethod || null,
+      account_id: selectedAccountId || null,
       bank: bank || null,
       place: place || null,
       date: new Date(date).toISOString()
@@ -92,6 +143,7 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
     setAmount('');
     setDescription('');
     setPaymentMethod('');
+    setSelectedAccountId('');
     setBank('');
     setPlace('');
     setShowMoreDetails(false);
@@ -398,14 +450,14 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
                 <div style={{ marginBottom: '1rem' }}>
                   <label className="form-label" style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                     <CreditCard size={14} color="var(--primary)" />
-                    <span>Método de Pago</span>
+                    <span>Método de Pago (Auto-selecciona tu cuenta)</span>
                   </label>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.35rem' }}>
                     {PAYMENT_METHODS.map(pm => (
                       <button
                         key={pm.id}
                         type="button"
-                        onClick={() => setPaymentMethod(paymentMethod === pm.id ? '' : pm.id)}
+                        onClick={() => handlePaymentMethodSelect(pm.id)}
                         className={`chip ${paymentMethod === pm.id ? 'active' : ''}`}
                         style={{ fontSize: '0.8rem', padding: '0.35rem 0.65rem' }}
                       >
@@ -414,6 +466,32 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
                     ))}
                   </div>
                 </div>
+
+                {/* Cuenta o Fondo a debitar */}
+                {accounts.length > 0 && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label className="form-label" style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <Building size={14} color="var(--primary)" />
+                      <span>Cuenta / Fondo a Debitar</span>
+                    </label>
+                    <select
+                      value={selectedAccountId}
+                      onChange={(e) => setSelectedAccountId(e.target.value)}
+                      className="form-select"
+                      style={{ fontSize: '0.85rem', padding: '0.65rem' }}
+                    >
+                      <option value="">Seleccionar cuenta asociada (Opcional)</option>
+                      {accounts.map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name} ({acc.bank}) — {acc.currency === 'USD' ? '$' : 'S/'} {parseFloat(acc.current_balance ?? acc.initial_balance ?? 0).toFixed(2)}
+                        </option>
+                      ))}
+                    </select>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.25rem' }}>
+                      💡 Si pagas con Yape o Efectivo, se descontará automáticamente de este saldo.
+                    </span>
+                  </div>
+                )}
 
                 {/* Banco (si es tarjeta o transferencia o elegido) */}
                 {(paymentMethod === 'debito' || paymentMethod === 'credito' || paymentMethod === 'transferencia' || paymentMethod === 'otro') && (

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bug, Cloud, CloudOff, PlusCircle, LayoutDashboard, ListFilter, Settings, ArrowRightLeft, RefreshCw, Wallet } from 'lucide-react';
+import { Bug, Cloud, CloudOff, PlusCircle, LayoutDashboard, ListFilter, Settings, ArrowRightLeft, RefreshCw, Wallet, User, LogIn, LogOut } from 'lucide-react';
 
 export default function Navbar({
   activeTab,
@@ -10,7 +10,10 @@ export default function Navbar({
   currentCurrency,
   onCurrencyChange,
   exchangeRate,
-  onRefreshExchangeRate
+  onRefreshExchangeRate,
+  currentUser,
+  onOpenAuthModal,
+  onLogout
 }) {
   return (
     <header style={{ marginBottom: '1.25rem' }}>
@@ -42,27 +45,92 @@ export default function Navbar({
             </div>
           </div>
 
-          {/* Cloud button (on mobile fits nicely on the top right) */}
-          <button
-            onClick={onOpenCloudConfig}
-            className="btn btn-secondary"
-            style={{
-              padding: '0.45rem 0.75rem',
-              fontSize: '0.78rem',
-              borderColor: cloudEnabled ? 'var(--success)' : 'var(--border-color)',
-              flexShrink: 0
-            }}
-            title="Configurar sincronización en la nube (Supabase)"
-          >
-            {cloudEnabled ? (
-              <Cloud size={16} color="var(--success)" />
+          {/* User Auth & Cloud status row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+            {currentUser ? (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                background: 'rgba(99, 102, 241, 0.12)',
+                border: '1px solid rgba(99, 102, 241, 0.25)',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.35rem 0.65rem'
+              }}>
+                <div style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  background: 'var(--primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  fontSize: '0.75rem',
+                  fontWeight: 700
+                }}>
+                  {currentUser.email ? currentUser.email.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <span style={{ fontSize: '0.75rem', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#e0e7ff' }}>
+                  {currentUser.email ? currentUser.email.split('@')[0] : 'Usuario'}
+                </span>
+                <button
+                  onClick={onLogout}
+                  title="Cerrar sesión"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '2px',
+                    marginLeft: '2px'
+                  }}
+                >
+                  <LogOut size={14} color="#fca5a5" />
+                </button>
+              </div>
             ) : (
-              <CloudOff size={16} color="var(--text-muted)" />
+              <button
+                onClick={onOpenAuthModal}
+                className="btn btn-primary"
+                style={{
+                  padding: '0.4rem 0.75rem',
+                  fontSize: '0.75rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem'
+                }}
+                title="Iniciar sesión o registrarte"
+              >
+                <LogIn size={14} />
+                <span>Ingresar</span>
+              </button>
             )}
-            <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>
-              {cloudEnabled ? 'Nube 🟢' : 'Nube'}
-            </span>
-          </button>
+
+            {/* Cloud config button */}
+            <button
+              onClick={onOpenCloudConfig}
+              className="btn btn-secondary"
+              style={{
+                padding: '0.45rem 0.75rem',
+                fontSize: '0.78rem',
+                borderColor: cloudEnabled ? 'var(--success)' : 'var(--border-color)',
+                flexShrink: 0
+              }}
+              title="Configurar conexión con Supabase"
+            >
+              {cloudEnabled ? (
+                <Cloud size={16} color="var(--success)" />
+              ) : (
+                <CloudOff size={16} color="var(--text-muted)" />
+              )}
+              <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                {cloudEnabled ? 'Nube 🟢' : 'Nube'}
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Currency Switcher & Live Exchange Rate Row */}

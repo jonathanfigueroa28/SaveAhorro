@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import ExpenseList from './components/ExpenseList';
 import LiquidityManager from './components/LiquidityManager';
 import CloudConfigModal from './components/CloudConfigModal';
+import AuthModal from './components/AuthModal';
 import {
   fetchExpenses,
   saveExpense,
@@ -15,13 +16,25 @@ import {
   getCloudConfig,
   getPreferredCurrency,
   setPreferredCurrency,
-  fetchLiveExchangeRate
+  fetchLiveExchangeRate,
+  getCurrentUser,
+  signOutUser,
+  onAuthStateChange,
+  fetchAccounts,
+  fetchIncomes,
+  fetchFixedExpenses
 } from './lib/supabaseClient';
 import { PlusCircle, LayoutDashboard, ListFilter, Cloud, Wallet } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('form');
   const [expenses, setExpenses] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [incomes, setIncomes] = useState([]);
+  const [fixedExpenses, setFixedExpenses] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  
   const [monthlyBudget, setMonthlyBudgetState] = useState(1500);
   const [currency, setCurrency] = useState(getPreferredCurrency());
   const [exchangeRate, setExchangeRate] = useState(3.75);
@@ -42,24 +55,54 @@ export default function App() {
     }
   };
 
-  // Load initial data
+  // Load initial data (expenses, accounts, incomes, fixed expenses, user)
   const loadData = async () => {
     setLoading(true);
     const config = getCloudConfig();
     setCloudEnabled(config.isEnabled && Boolean(config.supabaseUrl));
     
+    const user = await getCurrentUser();
+    setCurrentUser(user);
+
     const budget = getMonthlyBudget();
     setMonthlyBudgetState(budget);
 
-    const loadedExpenses = await fetchExpenses();
+    const [loadedExpenses, loadedAccounts, loadedIncomes, loadedFixed] = await Promise.all([
+      fetchExpenses(),
+      fetchAccounts(),
+      fetchIncomes(),
+      fetchFixedExpenses()
+    ]);
+
     setExpenses(loadedExpenses);
+    setAccounts(loadedAccounts);
+    setIncomes(loadedIncomes);
+    setFixedExpenses(loadedFixed);
     setLoading(false);
   };
 
   useEffect(() => {
     loadData();
     loadExchangeRate();
+
+    // Subscribe to auth state changes (persists login across weeks/reloads)
+    const subscription = onAuthStateChange(async (event, user) => {
+      setCurrentUser(user);
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        loadData();
+      }
+    });
+
+    return () => {
+      if (subscription?.unsubscribe) subscription.unsubscribe();
+    };
   }, []);
+
+  const handleLogout = async () => {
+    await signOutUser();
+    setCurrentUser(null);
+    loadData();
+  };
 
   const handleCurrencyChange = (newCur) => {
     setPreferredCurrency(newCur);
@@ -104,13 +147,16 @@ export default function App() {
         onCurrencyChange={handleCurrencyChange}
         exchangeRate={exchangeRate}
         onRefreshExchangeRate={() => loadExchangeRate(true)}
+        currentUser={currentUser}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onLogout={handleLogout}
       />
 
       {/* Main Content Area */}
       <main style={{ marginTop: '1rem' }}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-muted)' }}>
-            <p style={{ fontSize: '1.1rem' }}>Cargando tus registros de gastos...</p>
+            <p style={{ fontSize: '1.1rem' }}>Cargando tus datos de SaveAhorro...</p>
           </div>
         ) : (
           <>
@@ -119,6 +165,7 @@ export default function App() {
                 onAddExpense={handleAddExpense}
                 currentCurrency={currency}
                 onCurrencyChange={handleCurrencyChange}
+                accounts={accounts}
               />
             )}
 
@@ -149,6 +196,12 @@ export default function App() {
             {activeTab === 'liquidity' && (
               <LiquidityManager
                 expenses={expenses}
+                accounts={accounts}
+                onAccountsChange={setAccounts}
+                incomes={incomes}
+                onIncomesChange={setIncomes}
+                fixedExpenses={fixedExpenses}
+                onFixedExpensesChange={setFixedExpenses}
                 exchangeRate={exchangeRate}
                 currentCurrency={currency}
               />
@@ -202,6 +255,16 @@ export default function App() {
         isOpen={isCloudConfigOpen}
         onClose={() => setIsCloudConfigOpen(false)}
         onConfigSaved={loadData}
+      />
+
+      {/* Auth Modal (Login & Registration) */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthSuccess={(user) => {
+          setCurrentUser(user);
+          loadData();
+        }}
       />
 
     </div>

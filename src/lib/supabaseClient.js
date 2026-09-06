@@ -201,7 +201,7 @@ export const saveCloudConfig = (config) => {
   localStorage.setItem(LOCAL_STORAGE_KEY_CONFIG, JSON.stringify(config));
 };
 
-// Initialize Supabase Client dynamically
+// Initialize Supabase Client dynamically with session persistence
 let supabaseInstance = null;
 
 export const getSupabaseClient = () => {
@@ -211,7 +211,14 @@ export const getSupabaseClient = () => {
       try {
         // Sanitize URL: Remove /rest/v1 or trailing slashes if user pasted the REST endpoint
         const cleanUrl = config.supabaseUrl.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
-        supabaseInstance = createClient(cleanUrl, config.supabaseAnonKey.trim());
+        supabaseInstance = createClient(cleanUrl, config.supabaseAnonKey.trim(), {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            storage: window.localStorage
+          }
+        });
       } catch (e) {
         console.error('Failed to initialize Supabase client:', e);
         return null;
@@ -226,19 +233,338 @@ export const resetSupabaseClient = () => {
   supabaseInstance = null;
 };
 
+// --- AUTHENTICATION HELPERS ---
+
+export const getCurrentUser = async () => {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    const { data: { session }, error } = await client.auth.getSession();
+    if (error || !session) return null;
+    return session.user;
+  } catch (err) {
+    console.warn('Error fetching session:', err);
+    return null;
+  }
+};
+
+export const signUpWithEmail = async (email, password) => {
+  const client = getSupabaseClient();
+  if (!client) throw new Error('Supabase no está configurado. Conéctalo en el botón Nube.');
+  const { data, error } = await client.auth.signUp({
+    email: email.trim(),
+    password: password.trim()
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const signInWithEmail = async (email, password) => {
+  const client = getSupabaseClient();
+  if (!client) throw new Error('Supabase no está configurado. Conéctalo en el botón Nube.');
+  const { data, error } = await client.auth.signInWithPassword({
+    email: email.trim(),
+    password: password.trim()
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const signOutUser = async () => {
+  const client = getSupabaseClient();
+  if (client) {
+    try {
+      await client.auth.signOut();
+    } catch (e) {
+      console.warn('Error during sign out:', e);
+    }
+  }
+};
+
+export const onAuthStateChange = (callback) => {
+  const client = getSupabaseClient();
+  if (!client) return { unsubscribe: () => {} };
+  const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
+    callback(event, session?.user || null);
+  });
+  return subscription;
+};
+
+// --- MULTI-TABLE STORAGE KEYS ---
+const LOCAL_STORAGE_KEY_ACCOUNTS = 'saveahorro_accounts_v2';
+const LOCAL_STORAGE_KEY_INCOMES = 'saveahorro_incomes_v2';
+const LOCAL_STORAGE_KEY_FIXED = 'saveahorro_fixed_expenses_v2';
+
+// Cuentas predeterminadas (incluye Efectivo, Yape BCP, Plin, Ahorros Soles y Dólares)
+export const DEFAULT_ACCOUNTS = [
+  { id: 'acc_efectivo', name: '💵 Efectivo (Billetera)', type: 'efectivo', bank: 'Efectivo', currency: 'PEN', initial_balance: 100, is_operating: true, color: '#10b981' },
+  { id: 'acc_yape', name: '🟣 Yape (BCP Principal)', type: 'billetera_digital', bank: 'BCP', currency: 'PEN', initial_balance: 200, is_operating: true, color: '#8b5cf6' },
+  { id: 'acc_plin', name: '🔵 Plin (Interbank / BBVA)', type: 'billetera_digital', bank: 'Interbank', currency: 'PEN', initial_balance: 50, is_operating: true, color: '#06b6d4' },
+  { id: 'acc_bcp_debito', name: '💳 Cuenta Corriente BCP', type: 'banco', bank: 'BCP', currency: 'PEN', initial_balance: 500, is_operating: true, color: '#3b82f6' },
+  { id: 'acc_ahorro_pen', name: '🏦 Ahorro Reserva Soles', type: 'ahorros', bank: 'BBVA', currency: 'PEN', initial_balance: 3400, is_operating: false, color: '#f59e0b' },
+  { id: 'acc_ahorro_usd', name: '💵 Ahorro Reserva Dólares', type: 'ahorros', bank: 'Interbank', currency: 'USD', initial_balance: 2000, is_operating: false, color: '#10b981' },
+  { id: 'acc_tc_bcp', name: '💳 Tarjeta Crédito BCP', type: 'tarjeta_credito', bank: 'BCP', currency: 'PEN', initial_balance: 0, is_operating: false, color: '#ef4444' }
+];
+
+export const DEFAULT_INCOMES = [
+  { id: 'inc_1', title: 'Sueldo Principal (Soles)', amount: 2500, currency: 'PEN', frequency: 'mensual' },
+  { id: 'inc_2', title: 'Ingreso Extra / Remoto (USD)', amount: 0, currency: 'USD', frequency: 'mensual' }
+];
+
+export const DEFAULT_FIXED_EXPENSES = [
+  { id: 'fix_1', title: 'Alquiler / Casa', amount: 800, currency: 'PEN', category: 'servicios', due_day: 5, is_paid: false },
+  { id: 'fix_2', title: 'Luz (Enel / Luz del Sur)', amount: 120, currency: 'PEN', category: 'servicios', due_day: 18, is_paid: false },
+  { id: 'fix_3', title: 'Agua (Sedapal)', amount: 45, currency: 'PEN', category: 'servicios', due_day: 20, is_paid: false },
+  { id: 'fix_4', title: 'Internet Fibra Óptica', amount: 90, currency: 'PEN', category: 'servicios', due_day: 15, is_paid: false },
+  { id: 'fix_5', title: 'Suscripciones (Netflix / Spotify)', amount: 55, currency: 'PEN', category: 'entretenimiento', due_day: 25, is_paid: false }
+];
+
+// --- CUENTAS CRUD ---
+export const fetchAccounts = async () => {
+  const client = getSupabaseClient();
+  const user = await getCurrentUser();
+  if (client && user) {
+    try {
+      const { data, error } = await client
+        .from('accounts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true });
+      if (!error && data && data.length > 0) {
+        localStorage.setItem(LOCAL_STORAGE_KEY_ACCOUNTS, JSON.stringify(data));
+        return data;
+      }
+    } catch (e) {
+      console.warn('Error fetching accounts from Supabase:', e);
+    }
+  }
+
+  const raw = localStorage.getItem(LOCAL_STORAGE_KEY_ACCOUNTS);
+  if (raw) {
+    try { return JSON.parse(raw); } catch (e) {}
+  }
+  localStorage.setItem(LOCAL_STORAGE_KEY_ACCOUNTS, JSON.stringify(DEFAULT_ACCOUNTS));
+  return DEFAULT_ACCOUNTS;
+};
+
+export const saveAccount = async (account) => {
+  const client = getSupabaseClient();
+  const user = await getCurrentUser();
+  const raw = localStorage.getItem(LOCAL_STORAGE_KEY_ACCOUNTS);
+  let accounts = raw ? JSON.parse(raw) : DEFAULT_ACCOUNTS;
+
+  const itemToSave = {
+    ...account,
+    id: account.id || 'acc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+    initial_balance: parseFloat(account.initial_balance) || 0,
+    current_balance: parseFloat(account.current_balance ?? account.initial_balance) || 0,
+    user_id: user?.id || null,
+    created_at: account.created_at || new Date().toISOString()
+  };
+
+  const exists = accounts.some(a => a.id === itemToSave.id);
+  if (exists) {
+    accounts = accounts.map(a => a.id === itemToSave.id ? itemToSave : a);
+  } else {
+    accounts = [...accounts, itemToSave];
+  }
+  localStorage.setItem(LOCAL_STORAGE_KEY_ACCOUNTS, JSON.stringify(accounts));
+
+  if (client && user) {
+    try {
+      await client.from('accounts').upsert([itemToSave]);
+    } catch (err) {
+      console.warn('Supabase account save error:', err);
+    }
+  }
+  return itemToSave;
+};
+
+export const deleteAccount = async (id) => {
+  const raw = localStorage.getItem(LOCAL_STORAGE_KEY_ACCOUNTS);
+  if (raw) {
+    const accounts = JSON.parse(raw).filter(a => a.id !== id);
+    localStorage.setItem(LOCAL_STORAGE_KEY_ACCOUNTS, JSON.stringify(accounts));
+  }
+  const client = getSupabaseClient();
+  const user = await getCurrentUser();
+  if (client && user) {
+    try {
+      await client.from('accounts').delete().eq('id', id).eq('user_id', user.id);
+    } catch (e) {
+      console.warn('Error deleting account:', e);
+    }
+  }
+};
+
+// --- SUELDOS E INGRESOS CRUD ---
+export const fetchIncomes = async () => {
+  const client = getSupabaseClient();
+  const user = await getCurrentUser();
+  if (client && user) {
+    try {
+      const { data, error } = await client
+        .from('incomes')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true });
+      if (!error && data && data.length > 0) {
+        localStorage.setItem(LOCAL_STORAGE_KEY_INCOMES, JSON.stringify(data));
+        return data;
+      }
+    } catch (e) {
+      console.warn('Error fetching incomes:', e);
+    }
+  }
+  const raw = localStorage.getItem(LOCAL_STORAGE_KEY_INCOMES);
+  if (raw) {
+    try { return JSON.parse(raw); } catch (e) {}
+  }
+  localStorage.setItem(LOCAL_STORAGE_KEY_INCOMES, JSON.stringify(DEFAULT_INCOMES));
+  return DEFAULT_INCOMES;
+};
+
+export const saveIncome = async (income) => {
+  const client = getSupabaseClient();
+  const user = await getCurrentUser();
+  const raw = localStorage.getItem(LOCAL_STORAGE_KEY_INCOMES);
+  let incomes = raw ? JSON.parse(raw) : DEFAULT_INCOMES;
+
+  const itemToSave = {
+    ...income,
+    id: income.id || 'inc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+    amount: parseFloat(income.amount) || 0,
+    user_id: user?.id || null,
+    created_at: income.created_at || new Date().toISOString()
+  };
+
+  const exists = incomes.some(i => i.id === itemToSave.id);
+  if (exists) {
+    incomes = incomes.map(i => i.id === itemToSave.id ? itemToSave : i);
+  } else {
+    incomes = [...incomes, itemToSave];
+  }
+  localStorage.setItem(LOCAL_STORAGE_KEY_INCOMES, JSON.stringify(incomes));
+
+  if (client && user) {
+    try {
+      await client.from('incomes').upsert([itemToSave]);
+    } catch (err) {
+      console.warn('Error saving income to Supabase:', err);
+    }
+  }
+  return itemToSave;
+};
+
+export const deleteIncome = async (id) => {
+  const raw = localStorage.getItem(LOCAL_STORAGE_KEY_INCOMES);
+  if (raw) {
+    const list = JSON.parse(raw).filter(i => i.id !== id);
+    localStorage.setItem(LOCAL_STORAGE_KEY_INCOMES, JSON.stringify(list));
+  }
+  const client = getSupabaseClient();
+  const user = await getCurrentUser();
+  if (client && user) {
+    try {
+      await client.from('incomes').delete().eq('id', id).eq('user_id', user.id);
+    } catch (e) {}
+  }
+};
+
+// --- GASTOS FIJOS DEL MES CRUD ---
+export const fetchFixedExpenses = async () => {
+  const client = getSupabaseClient();
+  const user = await getCurrentUser();
+  if (client && user) {
+    try {
+      const { data, error } = await client
+        .from('fixed_expenses')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('due_day', { ascending: true });
+      if (!error && data && data.length > 0) {
+        localStorage.setItem(LOCAL_STORAGE_KEY_FIXED, JSON.stringify(data));
+        return data;
+      }
+    } catch (e) {
+      console.warn('Error fetching fixed expenses:', e);
+    }
+  }
+  const raw = localStorage.getItem(LOCAL_STORAGE_KEY_FIXED);
+  if (raw) {
+    try { return JSON.parse(raw); } catch (e) {}
+  }
+  localStorage.setItem(LOCAL_STORAGE_KEY_FIXED, JSON.stringify(DEFAULT_FIXED_EXPENSES));
+  return DEFAULT_FIXED_EXPENSES;
+};
+
+export const saveFixedExpense = async (fixed) => {
+  const client = getSupabaseClient();
+  const user = await getCurrentUser();
+  const raw = localStorage.getItem(LOCAL_STORAGE_KEY_FIXED);
+  let list = raw ? JSON.parse(raw) : DEFAULT_FIXED_EXPENSES;
+
+  const itemToSave = {
+    ...fixed,
+    id: fixed.id || 'fix_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+    amount: parseFloat(fixed.amount) || 0,
+    due_day: parseInt(fixed.due_day) || 1,
+    is_paid: Boolean(fixed.is_paid),
+    user_id: user?.id || null,
+    created_at: fixed.created_at || new Date().toISOString()
+  };
+
+  const exists = list.some(f => f.id === itemToSave.id);
+  if (exists) {
+    list = list.map(f => f.id === itemToSave.id ? itemToSave : f);
+  } else {
+    list = [...list, itemToSave];
+  }
+  localStorage.setItem(LOCAL_STORAGE_KEY_FIXED, JSON.stringify(list));
+
+  if (client && user) {
+    try {
+      await client.from('fixed_expenses').upsert([itemToSave]);
+    } catch (err) {
+      console.warn('Error saving fixed expense to Supabase:', err);
+    }
+  }
+  return itemToSave;
+};
+
+export const deleteFixedExpense = async (id) => {
+  const raw = localStorage.getItem(LOCAL_STORAGE_KEY_FIXED);
+  if (raw) {
+    const list = JSON.parse(raw).filter(f => f.id !== id);
+    localStorage.setItem(LOCAL_STORAGE_KEY_FIXED, JSON.stringify(list));
+  }
+  const client = getSupabaseClient();
+  const user = await getCurrentUser();
+  if (client && user) {
+    try {
+      await client.from('fixed_expenses').delete().eq('id', id).eq('user_id', user.id);
+    } catch (e) {}
+  }
+};
+
 // --- DATA ACCESS LAYER (HYBRID: LocalStorage + Supabase) ---
 
 export const fetchExpenses = async () => {
   const client = getSupabaseClient();
+  const user = await getCurrentUser();
   if (client) {
     try {
-      const { data, error } = await client
+      let query = client
         .from('expenses')
         .select('*')
         .order('date', { ascending: false });
+
+      if (user?.id) {
+        query = query.eq('user_id', user.id);
+      }
         
+      const { data, error } = await query;
       if (!error && data) {
-        // Also sync local storage as backup
         localStorage.setItem(LOCAL_STORAGE_KEY_EXPENSES, JSON.stringify(data));
         return data;
       } else {
@@ -263,6 +589,7 @@ export const fetchExpenses = async () => {
 
 export const saveExpense = async (expense) => {
   const currentCurrency = expense.currency || getPreferredCurrency() || 'PEN';
+  const user = await getCurrentUser();
   const newExpense = {
     id: expense.id || 'exp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
     amount: parseFloat(expense.amount),
@@ -271,8 +598,10 @@ export const saveExpense = async (expense) => {
     description: expense.description || '',
     is_ant_expense: Boolean(expense.is_ant_expense),
     payment_method: expense.payment_method || null,
+    account_id: expense.account_id || null,
     bank: expense.bank || null,
     place: expense.place || null,
+    user_id: user?.id || null,
     date: expense.date || new Date().toISOString(),
     created_at: expense.created_at || new Date().toISOString()
   };
@@ -375,9 +704,14 @@ export const deleteExpense = async (id) => {
 
   // Cloud remove
   const client = getSupabaseClient();
+  const user = await getCurrentUser();
   if (client) {
     try {
-      await client.from('expenses').delete().eq('id', id);
+      let query = client.from('expenses').delete().eq('id', id);
+      if (user?.id) {
+        query = query.eq('user_id', user.id);
+      }
+      await query;
     } catch (err) {
       console.error('Error deleting from Supabase:', err);
     }

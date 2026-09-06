@@ -11,27 +11,124 @@ export default function CloudConfigModal({ isOpen, onClose, onConfigSaved }) {
 
   if (!isOpen) return null;
 
-  const sqlScript = `create table if not exists public.expenses (
+  const sqlScript = `-- =========================================================
+-- SAVEAHORRO 🐜: MIGRACIÓN COMPLETA MULTIUSUARIO Y MULTITABLA
+-- Copia y pega todo este bloque en el SQL Editor de Supabase y presiona "RUN"
+-- =========================================================
+
+-- 1. TABLA DE GASTOS (EXPENSES)
+create table if not exists public.expenses (
   id text primary key,
+  user_id uuid references auth.users(id) on delete cascade default auth.uid(),
   amount numeric not null,
   currency text default 'PEN',
   category text not null,
   description text,
   is_ant_expense boolean default false,
-  date timestamp with time zone default now(),
-  created_at timestamp with time zone default now()
+  payment_method text,
+  account_id text,
+  bank text,
+  place text,
+  date timestamptz default now(),
+  created_at timestamptz default now()
 );
 
--- Si la tabla ya fue creada anteriormente, añadir la columna currency si no existe:
+alter table public.expenses add column if not exists user_id uuid references auth.users(id) on delete cascade default auth.uid();
 alter table public.expenses add column if not exists currency text default 'PEN';
+alter table public.expenses add column if not exists payment_method text;
+alter table public.expenses add column if not exists account_id text;
+alter table public.expenses add column if not exists bank text;
+alter table public.expenses add column if not exists place text;
 
--- Otorgar permisos completos al rol anon (público) y autenticado
+-- 2. TABLA DE CUENTAS BANCARIAS Y EFECTIVO (ACCOUNTS)
+create table if not exists public.accounts (
+  id text primary key,
+  user_id uuid references auth.users(id) on delete cascade default auth.uid(),
+  name text not null,
+  type text not null,
+  bank text,
+  currency text default 'PEN',
+  initial_balance numeric default 0,
+  current_balance numeric default 0,
+  is_operating boolean default true,
+  color text default '#3b82f6',
+  created_at timestamptz default now()
+);
+
+-- 3. TABLA DE MÚLTIPLES SUELDOS E INGRESOS (INCOMES)
+create table if not exists public.incomes (
+  id text primary key,
+  user_id uuid references auth.users(id) on delete cascade default auth.uid(),
+  title text not null,
+  amount numeric not null default 0,
+  currency text default 'PEN',
+  frequency text default 'mensual',
+  created_at timestamptz default now()
+);
+
+-- 4. TABLA DE GASTOS FIJOS DEL MES (FIXED_EXPENSES)
+create table if not exists public.fixed_expenses (
+  id text primary key,
+  user_id uuid references auth.users(id) on delete cascade default auth.uid(),
+  title text not null,
+  amount numeric not null default 0,
+  currency text default 'PEN',
+  category text default 'servicios',
+  due_day integer default 1,
+  is_paid boolean default false,
+  account_id text,
+  created_at timestamptz default now()
+);
+
+-- 5. TABLA DE DEUDAS Y TARJETAS (DEBTS)
+create table if not exists public.debts (
+  id text primary key,
+  user_id uuid references auth.users(id) on delete cascade default auth.uid(),
+  title text not null,
+  type text default 'tarjeta_credito',
+  total_debt numeric default 0,
+  currency text default 'PEN',
+  due_date text,
+  created_at timestamptz default now()
+);
+
+-- PERMISOS Y SEGURIDAD ROW LEVEL SECURITY (RLS)
 grant all on table public.expenses to anon, authenticated, service_role;
+grant all on table public.accounts to anon, authenticated, service_role;
+grant all on table public.incomes to anon, authenticated, service_role;
+grant all on table public.fixed_expenses to anon, authenticated, service_role;
+grant all on table public.debts to anon, authenticated, service_role;
 
--- Habilitar RLS y permitir acceso completo (lectura y escritura)
 alter table public.expenses enable row level security;
-drop policy if exists "Acceso Publico Expenses" on public.expenses;
-create policy "Acceso Publico Expenses" on public.expenses for all to public using (true) with check (true);`;
+alter table public.accounts enable row level security;
+alter table public.incomes enable row level security;
+alter table public.fixed_expenses enable row level security;
+alter table public.debts enable row level security;
+
+drop policy if exists "User Expenses Policy" on public.expenses;
+create policy "User Expenses Policy" on public.expenses for all to public
+using (auth.uid() = user_id or auth.uid() is null or user_id is null)
+with check (auth.uid() = user_id or auth.uid() is null or user_id is null);
+
+drop policy if exists "User Accounts Policy" on public.accounts;
+create policy "User Accounts Policy" on public.accounts for all to public
+using (auth.uid() = user_id or auth.uid() is null or user_id is null)
+with check (auth.uid() = user_id or auth.uid() is null or user_id is null);
+
+drop policy if exists "User Incomes Policy" on public.incomes;
+create policy "User Incomes Policy" on public.incomes for all to public
+using (auth.uid() = user_id or auth.uid() is null or user_id is null)
+with check (auth.uid() = user_id or auth.uid() is null or user_id is null);
+
+drop policy if exists "User Fixed Expenses Policy" on public.fixed_expenses;
+create policy "User Fixed Expenses Policy" on public.fixed_expenses for all to public
+using (auth.uid() = user_id or auth.uid() is null or user_id is null)
+with check (auth.uid() = user_id or auth.uid() is null or user_id is null);
+
+drop policy if exists "User Debts Policy" on public.debts;
+create policy "User Debts Policy" on public.debts for all to public
+using (auth.uid() = user_id or auth.uid() is null or user_id is null)
+with check (auth.uid() = user_id or auth.uid() is null or user_id is null);`;
 
   const handleCopySql = () => {
     navigator.clipboard.writeText(sqlScript);
