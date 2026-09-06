@@ -24,7 +24,7 @@ import {
   MapPin
 } from 'lucide-react';
 
-export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGORIES, currentCurrency = 'PEN' }) {
+export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGORIES, currentCurrency = 'PEN', onCurrencyChange }) {
   const [formCurrency, setFormCurrency] = useState(currentCurrency);
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('gastos-hormiga');
@@ -41,6 +41,13 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
   useEffect(() => {
     setFormCurrency(currentCurrency);
   }, [currentCurrency]);
+
+  const handleCurrencySelect = (cur) => {
+    setFormCurrency(cur);
+    if (onCurrencyChange) {
+      onCurrencyChange(cur);
+    }
+  };
 
   const currentPresets = ANT_PRESETS_BY_CURRENCY[formCurrency] || ANT_PRESETS_BY_CURRENCY.PEN;
 
@@ -126,7 +133,7 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
           }}>
             <button
               type="button"
-              onClick={() => setFormCurrency('PEN')}
+              onClick={() => handleCurrencySelect('PEN')}
               style={{
                 padding: '0.4rem 0.8rem',
                 fontSize: '0.8rem',
@@ -142,7 +149,7 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
             </button>
             <button
               type="button"
-              onClick={() => setFormCurrency('USD')}
+              onClick={() => handleCurrencySelect('USD')}
               style={{
                 padding: '0.4rem 0.8rem',
                 fontSize: '0.8rem',

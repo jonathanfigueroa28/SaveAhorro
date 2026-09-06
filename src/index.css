@@ -116,6 +116,27 @@ h1, h2, h3, h4, h5, h6 {
   white-space: nowrap;
 }
 
+.header-exchange-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.28);
+  padding: 0.42rem 0.7rem;
+  border-radius: var(--radius-md);
+  color: #e0e7ff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.header-exchange-badge:hover {
+  background: rgba(99, 102, 241, 0.22);
+  border-color: var(--primary);
+}
+
 @media (max-width: 640px) {
   .header-bar {
     flex-direction: column;
@@ -134,10 +155,12 @@ h1, h2, h3, h4, h5, h6 {
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
+    flex-wrap: wrap;
   }
 
   .currency-toggle-group {
     flex: 1;
+    min-width: 170px;
     display: flex;
   }
 
@@ -146,6 +169,11 @@ h1, h2, h3, h4, h5, h6 {
     text-align: center;
     padding: 0.48rem 0.25rem;
     font-size: 0.8rem;
+  }
+
+  .header-exchange-badge {
+    padding: 0.45rem 0.65rem;
+    font-size: 0.76rem;
   }
 }
 

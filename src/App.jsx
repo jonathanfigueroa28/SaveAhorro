@@ -13,7 +13,8 @@ import {
   setMonthlyBudget as saveMonthlyBudget,
   getCloudConfig,
   getPreferredCurrency,
-  setPreferredCurrency
+  setPreferredCurrency,
+  fetchLiveExchangeRate
 } from './lib/supabaseClient';
 import { PlusCircle, LayoutDashboard, ListFilter, Cloud } from 'lucide-react';
 
@@ -22,9 +23,23 @@ export default function App() {
   const [expenses, setExpenses] = useState([]);
   const [monthlyBudget, setMonthlyBudgetState] = useState(1500);
   const [currency, setCurrency] = useState(getPreferredCurrency());
+  const [exchangeRate, setExchangeRate] = useState(3.75);
+  const [exchangeUpdatedAt, setExchangeUpdatedAt] = useState('');
   const [isCloudConfigOpen, setIsCloudConfigOpen] = useState(false);
   const [cloudEnabled, setCloudEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Load live market exchange rate
+  const loadExchangeRate = async (forceRefresh = false) => {
+    if (forceRefresh) {
+      localStorage.removeItem('control_ahorro_exchange_rate_v1');
+    }
+    const data = await fetchLiveExchangeRate();
+    if (data?.rate) {
+      setExchangeRate(data.rate);
+      setExchangeUpdatedAt(data.updatedAt || 'Reciente');
+    }
+  };
 
   // Load initial data
   const loadData = async () => {
@@ -42,6 +57,7 @@ export default function App() {
 
   useEffect(() => {
     loadData();
+    loadExchangeRate();
   }, []);
 
   const handleCurrencyChange = (newCur) => {
@@ -64,10 +80,8 @@ export default function App() {
   };
 
   const handleDeleteExpense = async (id) => {
-    if (window.confirm('¿Estás seguro de que deseas eliminar este gasto?')) {
-      await deleteExpense(id);
-      setExpenses(prev => prev.filter(e => e.id !== id));
-    }
+    await deleteExpense(id);
+    setExpenses(prev => prev.filter(e => e.id !== id));
   };
 
   const handleUpdateBudget = (newBudget) => {
@@ -87,6 +101,8 @@ export default function App() {
         monthlyBudget={monthlyBudget}
         currentCurrency={currency}
         onCurrencyChange={handleCurrencyChange}
+        exchangeRate={exchangeRate}
+        onRefreshExchangeRate={() => loadExchangeRate(true)}
       />
 
       {/* Main Content Area */}
@@ -101,6 +117,7 @@ export default function App() {
               <ExpenseForm
                 onAddExpense={handleAddExpense}
                 currentCurrency={currency}
+                onCurrencyChange={handleCurrencyChange}
               />
             )}
 
@@ -110,6 +127,10 @@ export default function App() {
                 monthlyBudget={monthlyBudget}
                 setMonthlyBudget={handleUpdateBudget}
                 currentCurrency={currency}
+                onCurrencyChange={handleCurrencyChange}
+                exchangeRate={exchangeRate}
+                exchangeUpdatedAt={exchangeUpdatedAt}
+                onRefreshExchangeRate={() => loadExchangeRate(true)}
               />
             )}
 
@@ -119,6 +140,7 @@ export default function App() {
                 onDeleteExpense={handleDeleteExpense}
                 onUpdateExpense={handleUpdateExpense}
                 currentCurrency={currency}
+                exchangeRate={exchangeRate}
               />
             )}
           </>

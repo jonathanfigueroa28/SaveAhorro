@@ -1,7 +1,17 @@
 import React from 'react';
-import { PiggyBank, Cloud, CloudOff, PlusCircle, LayoutDashboard, ListFilter, Settings } from 'lucide-react';
+import { PiggyBank, Cloud, CloudOff, PlusCircle, LayoutDashboard, ListFilter, Settings, ArrowRightLeft, RefreshCw } from 'lucide-react';
 
-export default function Navbar({ activeTab, setActiveTab, cloudEnabled, onOpenCloudConfig, monthlyBudget, currentCurrency, onCurrencyChange }) {
+export default function Navbar({
+  activeTab,
+  setActiveTab,
+  cloudEnabled,
+  onOpenCloudConfig,
+  monthlyBudget,
+  currentCurrency,
+  onCurrencyChange,
+  exchangeRate,
+  onRefreshExchangeRate
+}) {
   return (
     <header style={{ marginBottom: '1.25rem' }}>
       <div className="header-bar">
@@ -54,7 +64,7 @@ export default function Navbar({ activeTab, setActiveTab, cloudEnabled, onOpenCl
           </button>
         </div>
 
-        {/* Currency Switcher Row */}
+        {/* Currency Switcher & Live Exchange Rate Row */}
         <div className="header-actions">
           <div className="currency-toggle-group">
             <button
@@ -80,6 +90,20 @@ export default function Navbar({ activeTab, setActiveTab, cloudEnabled, onOpenCl
               💵 Dólares ($)
             </button>
           </div>
+
+          {/* Live Google/Market Exchange Rate Badge */}
+          {exchangeRate && (
+            <div
+              className="header-exchange-badge"
+              title="Tasa de cambio Google / Mercado en tiempo real (Clic para refrescar)"
+              onClick={onRefreshExchangeRate}
+              style={{ cursor: 'pointer' }}
+            >
+              <ArrowRightLeft size={13} color="var(--primary)" />
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>TC:</span>
+              <strong style={{ fontSize: '0.8rem', color: '#e0e7ff' }}>S/ {exchangeRate.toFixed(3)}</strong>
+            </div>
+          )}
         </div>
       </div>
 

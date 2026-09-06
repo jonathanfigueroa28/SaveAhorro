@@ -50,7 +50,11 @@ export default function Dashboard({
   monthlyBudget,
   setMonthlyBudget,
   categories = DEFAULT_CATEGORIES,
-  currentCurrency = 'PEN'
+  currentCurrency = 'PEN',
+  onCurrencyChange,
+  exchangeRate = 3.75,
+  exchangeUpdatedAt = '',
+  onRefreshExchangeRate
 }) {
   const [timeFilter, setTimeFilter] = useState('this_month'); // 'this_month', 'last_30', 'all'
   const [currencyMode, setCurrencyMode] = useState('consolidated'); // 'PEN', 'USD', 'consolidated'
@@ -60,12 +64,28 @@ export default function Dashboard({
 
   // Tipo de cambio en tiempo real (Google / Mercado Interbancario sin SUNAT)
   const [exchangeData, setExchangeData] = useState({
-    rate: 3.75,
-    updatedAt: '',
+    rate: exchangeRate || 3.75,
+    updatedAt: exchangeUpdatedAt || '',
     loading: false
   });
 
+  useEffect(() => {
+    if (exchangeRate) {
+      setExchangeData(prev => ({
+        ...prev,
+        rate: exchangeRate,
+        updatedAt: exchangeUpdatedAt || prev.updatedAt
+      }));
+    }
+  }, [exchangeRate, exchangeUpdatedAt]);
+
   const loadExchangeRate = async (forceRefresh = false) => {
+    if (onRefreshExchangeRate) {
+      setExchangeData(prev => ({ ...prev, loading: true }));
+      await onRefreshExchangeRate();
+      setExchangeData(prev => ({ ...prev, loading: false }));
+      return;
+    }
     if (forceRefresh) {
       localStorage.removeItem('control_ahorro_exchange_rate_v1');
     }
@@ -84,8 +104,17 @@ export default function Dashboard({
   };
 
   useEffect(() => {
-    loadExchangeRate();
-  }, []);
+    if (!exchangeRate) {
+      loadExchangeRate();
+    }
+  }, [exchangeRate]);
+
+  const handleCurrencyModeSelect = (mode) => {
+    setCurrencyMode(mode);
+    if (onCurrencyChange && (mode === 'PEN' || mode === 'USD')) {
+      onCurrencyChange(mode);
+    }
+  };
 
   // Filter expenses by timeframe
   const timeFilteredExpenses = useMemo(() => {
@@ -307,21 +336,21 @@ export default function Dashboard({
             <div style={{ display: 'flex', gap: '0.25rem', background: 'rgba(255,255,255,0.05)', padding: '0.2rem', borderRadius: 'var(--radius-md)', flexWrap: 'wrap' }}>
               <button
                 className={`chip ${currencyMode === 'consolidated' ? 'active' : ''}`}
-                onClick={() => setCurrencyMode('consolidated')}
+                onClick={() => handleCurrencyModeSelect('consolidated')}
                 style={{ fontSize: '0.76rem', padding: '0.3rem 0.65rem' }}
               >
                 🌐 Consolidado
               </button>
               <button
                 className={`chip ${currencyMode === 'PEN' ? 'active' : ''}`}
-                onClick={() => setCurrencyMode('PEN')}
+                onClick={() => handleCurrencyModeSelect('PEN')}
                 style={{ fontSize: '0.76rem', padding: '0.3rem 0.65rem' }}
               >
                 🇵🇪 Soles (S/)
               </button>
               <button
                 className={`chip ${currencyMode === 'USD' ? 'active' : ''}`}
-                onClick={() => setCurrencyMode('USD')}
+                onClick={() => handleCurrencyModeSelect('USD')}
                 style={{ fontSize: '0.76rem', padding: '0.3rem 0.65rem' }}
               >
                 💵 Dólares ($)
