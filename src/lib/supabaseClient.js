@@ -446,3 +446,32 @@ function getInitialSeedData() {
   localStorage.setItem(LOCAL_STORAGE_KEY_EXPENSES, JSON.stringify(seed));
   return seed;
 }
+
+const LOCAL_STORAGE_KEY_LIQUIDITY = 'saveahorro_liquidity_v1';
+
+export const getLiquidityData = () => {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY_LIQUIDITY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.error('Error reading liquidity data', e);
+  }
+  return {
+    accounts: [
+      { id: 'acc_1', name: 'Cuenta Principal (Sueldo / Día a día)', bank: 'BCP', currency: 'PEN', balance: 200, isOperating: true },
+      { id: 'acc_2', name: 'Ahorro Reserva Soles', bank: 'BBVA', currency: 'PEN', balance: 3400, isOperating: false },
+      { id: 'acc_3', name: 'Ahorro Reserva Dólares', bank: 'Interbank', currency: 'USD', balance: 2000, isOperating: false }
+    ],
+    expectedSalary: 2500,
+    creditCardInitialDebt: 0
+  };
+};
+
+export const saveLiquidityData = (data) => {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY_LIQUIDITY, JSON.stringify(data));
+  } catch (e) {
+    console.error('Error saving liquidity data', e);
+  }
+};
+

@@ -33,16 +33,31 @@ export default function ExpenseList({
   onUpdateExpense,
   categories = DEFAULT_CATEGORIES,
   currentCurrency = 'PEN',
+  onCurrencyChange,
   exchangeRate = 3.75
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedCurrency, setSelectedCurrency] = useState('all');
+  const [selectedCurrency, setSelectedCurrency] = useState(currentCurrency || 'all');
   const [onlyAnt, setOnlyAnt] = useState(false);
   const [groupBy, setGroupBy] = useState('month'); // 'month', 'week', 'year', 'none'
   const [unifyToSoles, setUnifyToSoles] = useState(true); // Unificar USD -> PEN al TC Google/Mercado
   const [editingExpense, setEditingExpense] = useState(null);
   const [expenseToDelete, setExpenseToDelete] = useState(null);
+
+  // Sync currency filter if top currency changes
+  useEffect(() => {
+    if (currentCurrency && currentCurrency !== 'all') {
+      setSelectedCurrency(currentCurrency);
+    }
+  }, [currentCurrency]);
+
+  const handleCurrencyFilterChange = (cur) => {
+    setSelectedCurrency(cur);
+    if (onCurrencyChange && (cur === 'PEN' || cur === 'USD')) {
+      onCurrencyChange(cur);
+    }
+  };
 
   // Filtered Expenses
   const filteredExpenses = useMemo(() => {
@@ -375,7 +390,7 @@ export default function ExpenseList({
           <div>
             <select
               value={selectedCurrency}
-              onChange={(e) => setSelectedCurrency(e.target.value)}
+              onChange={(e) => handleCurrencyFilterChange(e.target.value)}
               className="form-select"
               style={{ fontSize: '0.85rem', padding: '0.65rem' }}
             >
@@ -580,7 +595,7 @@ export default function ExpenseList({
         </div>
       )}
 
-      {/* MODAL DE EDICIÓN SENCILLA */}
+      {/* MODAL DE EDICIÓN SENCILLA (AJUSTADO: ENCABEZADO Y BOTONES FIJOS SIEMPRE VISIBLES) */}
       {editingExpense && (
         <div style={{
           position: 'fixed',
@@ -590,6 +605,7 @@ export default function ExpenseList({
           bottom: 0,
           backgroundColor: 'rgba(5, 8, 15, 0.85)',
           backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -598,189 +614,272 @@ export default function ExpenseList({
         }}>
           <div className="glass-card animate-fade-in" style={{
             width: '100%',
-            maxWidth: '540px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            padding: '1.5rem',
-            position: 'relative'
+            maxWidth: '520px',
+            maxHeight: '92vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            padding: 0,
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+            boxShadow: '0 16px 40px rgba(0, 0, 0, 0.6)'
           }}>
-            <button
-              onClick={() => setEditingExpense(null)}
-              style={{
-                position: 'absolute',
-                top: '1rem',
-                right: '1rem',
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid var(--border-color)',
-                color: 'var(--text-muted)',
-                borderRadius: '50%',
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer'
-              }}
-            >
-              <X size={16} />
-            </button>
+            
+            {/* Encabezado Fijo del Modal */}
+            <div style={{
+              padding: '1rem 1.25rem',
+              borderBottom: '1px solid var(--border-color)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'rgba(255, 255, 255, 0.03)',
+              flexShrink: 0
+            }}>
+              <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '0.45rem', margin: 0 }}>
+                <Edit3 size={18} color="var(--primary)" />
+                <span>Editar Gasto</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingExpense(null)}
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-muted)',
+                  borderRadius: '50%',
+                  width: '30px',
+                  height: '30px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer'
+                }}
+              >
+                <X size={15} />
+              </button>
+            </div>
 
-            <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Edit3 size={18} color="var(--primary)" />
-              <span>Editar Gasto</span>
-            </h3>
-
-            <form onSubmit={handleSaveEdit}>
-              {/* Currency & Amount */}
-              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-                <div style={{ width: '120px' }}>
-                  <label className="form-label" style={{ fontSize: '0.78rem' }}>Moneda</label>
-                  <select
-                    value={editingExpense.currency || 'PEN'}
-                    onChange={(e) => setEditingExpense({ ...editingExpense, currency: e.target.value })}
-                    className="form-select"
-                  >
-                    <option value="PEN">🇵🇪 S/ Soles</option>
-                    <option value="USD">💵 $ Dólares</option>
-                  </select>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label className="form-label" style={{ fontSize: '0.78rem' }}>Monto</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={editingExpense.amount}
-                    onChange={(e) => setEditingExpense({ ...editingExpense, amount: e.target.value })}
-                    className="form-input"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Description & Category */}
-              <div style={{ marginBottom: '1rem' }}>
-                <label className="form-label" style={{ fontSize: '0.78rem' }}>Detalle / Descripción</label>
-                <input
-                  type="text"
-                  value={editingExpense.description || ''}
-                  onChange={(e) => setEditingExpense({ ...editingExpense, description: e.target.value })}
-                  className="form-input"
-                  placeholder="Ej: Almuerzo, Taxi, Café..."
-                />
-              </div>
-
-              <div className="grid-2" style={{ marginBottom: '1rem' }}>
-                <div>
-                  <label className="form-label" style={{ fontSize: '0.78rem' }}>Categoría</label>
-                  <select
-                    value={editingExpense.category}
-                    onChange={(e) => setEditingExpense({ ...editingExpense, category: e.target.value })}
-                    className="form-select"
-                  >
-                    {categories.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="form-label" style={{ fontSize: '0.78rem' }}>Fecha y Hora (Lima)</label>
-                  <input
-                    type="datetime-local"
-                    value={editingExpense.date}
-                    onChange={(e) => setEditingExpense({ ...editingExpense, date: e.target.value })}
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              {/* Gasto Hormiga Checkbox */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.6rem',
-                background: 'rgba(255,255,255,0.03)',
-                padding: '0.65rem 0.85rem',
-                borderRadius: 'var(--radius-md)',
-                marginBottom: '1rem',
-                cursor: 'pointer'
-              }} onClick={() => setEditingExpense({ ...editingExpense, is_ant_expense: !editingExpense.is_ant_expense })}>
-                <input
-                  type="checkbox"
-                  checked={Boolean(editingExpense.is_ant_expense)}
-                  onChange={(e) => setEditingExpense({ ...editingExpense, is_ant_expense: e.target.checked })}
-                  style={{ width: '16px', height: '16px', accentColor: '#f59e0b' }}
-                />
-                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                  Marcar como Gasto Hormiga 🐜
-                </span>
-              </div>
-
-              {/* Método de pago */}
-              <div style={{ marginBottom: '1rem' }}>
-                <label className="form-label" style={{ fontSize: '0.78rem' }}>Método de Pago</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                  {PAYMENT_METHODS.map(pm => (
+            {/* Formulario con cuerpo scrollable */}
+            <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem' }}>
+                
+                {/* Selector de Moneda tipo switch limpio */}
+                <div style={{ marginBottom: '1rem' }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Moneda del Gasto</label>
+                  <div style={{ display: 'flex', gap: '0.35rem', background: 'rgba(255, 255, 255, 0.05)', padding: '3px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                     <button
-                      key={pm.id}
                       type="button"
-                      onClick={() => setEditingExpense({ ...editingExpense, payment_method: editingExpense.payment_method === pm.id ? '' : pm.id })}
-                      className={`chip ${editingExpense.payment_method === pm.id ? 'active' : ''}`}
-                      style={{ fontSize: '0.75rem', padding: '0.3rem 0.55rem' }}
+                      onClick={() => setEditingExpense({ ...editingExpense, currency: 'PEN' })}
+                      className="currency-btn"
+                      style={{
+                        flex: 1,
+                        padding: '0.45rem',
+                        background: (editingExpense.currency || 'PEN') === 'PEN' ? 'var(--primary)' : 'transparent',
+                        color: (editingExpense.currency || 'PEN') === 'PEN' ? '#fff' : 'var(--text-muted)'
+                      }}
                     >
-                      {pm.name}
+                      🇵🇪 Soles (S/)
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() => setEditingExpense({ ...editingExpense, currency: 'USD' })}
+                      className="currency-btn"
+                      style={{
+                        flex: 1,
+                        padding: '0.45rem',
+                        background: editingExpense.currency === 'USD' ? 'var(--primary)' : 'transparent',
+                        color: editingExpense.currency === 'USD' ? '#fff' : 'var(--text-muted)'
+                      }}
+                    >
+                      💵 Dólares ($)
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              {/* Banco y Lugar */}
-              <div className="grid-2" style={{ marginBottom: '1.25rem' }}>
-                <div>
-                  <label className="form-label" style={{ fontSize: '0.78rem' }}>Banco (Opcional)</label>
-                  <select
-                    value={editingExpense.bank || ''}
-                    onChange={(e) => setEditingExpense({ ...editingExpense, bank: e.target.value })}
-                    className="form-select"
-                  >
-                    <option value="">Ninguno / No aplica</option>
-                    {PERU_BANKS.map(b => (
-                      <option key={b} value={b}>{b}</option>
-                    ))}
-                  </select>
+                {/* Monto */}
+                <div style={{ marginBottom: '1rem' }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Monto</label>
+                  <div style={{ position: 'relative' }}>
+                    <div style={{
+                      position: 'absolute',
+                      left: '0.85rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: editingExpense.currency === 'USD' ? '#10b981' : 'var(--primary)',
+                      fontWeight: 800,
+                      fontSize: '1.1rem'
+                    }}>
+                      {editingExpense.currency === 'USD' ? '$' : 'S/'}
+                    </div>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={editingExpense.amount}
+                      onChange={(e) => setEditingExpense({ ...editingExpense, amount: e.target.value })}
+                      className="form-input"
+                      style={{ paddingLeft: '2.4rem', fontSize: '1.25rem', fontWeight: '700' }}
+                      required
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="form-label" style={{ fontSize: '0.78rem' }}>Lugar / Establecimiento</label>
+
+                {/* Detalle / Descripción */}
+                <div style={{ marginBottom: '1rem' }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Detalle / Descripción</label>
                   <input
                     type="text"
-                    value={editingExpense.place || ''}
-                    onChange={(e) => setEditingExpense({ ...editingExpense, place: e.target.value })}
+                    value={editingExpense.description || ''}
+                    onChange={(e) => setEditingExpense({ ...editingExpense, description: e.target.value })}
                     className="form-input"
-                    placeholder="Ej: Tambo, Metro, Grifo..."
+                    placeholder="Ej: Almuerzo, Taxi, Café..."
                   />
                 </div>
+
+                {/* Categoría y Fecha */}
+                <div className="grid-2" style={{ marginBottom: '1rem' }}>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Categoría</label>
+                    <select
+                      value={editingExpense.category}
+                      onChange={(e) => {
+                        const newCat = e.target.value;
+                        setEditingExpense({
+                          ...editingExpense,
+                          category: newCat,
+                          is_ant_expense: newCat === 'gastos-hormiga'
+                        });
+                      }}
+                      className="form-select"
+                    >
+                      {categories.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Fecha y Hora (Lima)</label>
+                    <input
+                      type="datetime-local"
+                      value={editingExpense.date}
+                      onChange={(e) => setEditingExpense({ ...editingExpense, date: e.target.value })}
+                      className="form-input"
+                    />
+                  </div>
+                </div>
+
+                {/* Gasto Hormiga Checkbox con sincronización */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                  background: editingExpense.is_ant_expense ? 'var(--accent-ant-light)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${editingExpense.is_ant_expense ? 'rgba(245, 158, 11, 0.4)' : 'var(--border-color)'}`,
+                  padding: '0.65rem 0.85rem',
+                  borderRadius: 'var(--radius-md)',
+                  marginBottom: '1rem',
+                  cursor: 'pointer'
+                }} onClick={() => {
+                  const nextChecked = !editingExpense.is_ant_expense;
+                  setEditingExpense({
+                    ...editingExpense,
+                    is_ant_expense: nextChecked,
+                    category: nextChecked ? 'gastos-hormiga' : (editingExpense.category === 'gastos-hormiga' ? 'otros' : editingExpense.category)
+                  });
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(editingExpense.is_ant_expense)}
+                    onChange={(e) => {
+                      const nextChecked = e.target.checked;
+                      setEditingExpense({
+                        ...editingExpense,
+                        is_ant_expense: nextChecked,
+                        category: nextChecked ? 'gastos-hormiga' : (editingExpense.category === 'gastos-hormiga' ? 'otros' : editingExpense.category)
+                      });
+                    }}
+                    style={{ width: '16px', height: '16px', accentColor: '#f59e0b', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: editingExpense.is_ant_expense ? '#fef08a' : 'inherit' }}>
+                    Marcar como Gasto Hormiga 🐜
+                  </span>
+                </div>
+
+                {/* Método de pago */}
+                <div style={{ marginBottom: '1rem' }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Método de Pago</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                    {PAYMENT_METHODS.map(pm => (
+                      <button
+                        key={pm.id}
+                        type="button"
+                        onClick={() => setEditingExpense({ ...editingExpense, payment_method: editingExpense.payment_method === pm.id ? '' : pm.id })}
+                        className={`chip ${editingExpense.payment_method === pm.id ? 'active' : ''}`}
+                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.55rem' }}
+                      >
+                        {pm.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Banco y Lugar */}
+                <div className="grid-2" style={{ marginBottom: '0.5rem' }}>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Banco (Opcional)</label>
+                    <select
+                      value={editingExpense.bank || ''}
+                      onChange={(e) => setEditingExpense({ ...editingExpense, bank: e.target.value })}
+                      className="form-select"
+                    >
+                      <option value="">Ninguno / No aplica</option>
+                      {PERU_BANKS.map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Lugar / Establecimiento</label>
+                    <input
+                      type="text"
+                      value={editingExpense.place || ''}
+                      onChange={(e) => setEditingExpense({ ...editingExpense, place: e.target.value })}
+                      className="form-input"
+                      placeholder="Ej: Tambo, Metro, Grifo..."
+                    />
+                  </div>
+                </div>
+
               </div>
 
-              {/* Actions */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+              {/* Pie Fijo del Modal (Botones siempre visibles) */}
+              <div style={{
+                padding: '0.85rem 1.25rem',
+                borderTop: '1px solid var(--border-color)',
+                background: 'rgba(11, 15, 25, 0.95)',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '0.65rem',
+                flexShrink: 0
+              }}>
                 <button
                   type="button"
                   onClick={() => setEditingExpense(null)}
                   className="btn btn-secondary"
-                  style={{ padding: '0.65rem 1rem', fontSize: '0.85rem' }}
+                  style={{ padding: '0.6rem 1rem', fontSize: '0.85rem' }}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  style={{ padding: '0.65rem 1.25rem', fontSize: '0.85rem' }}
+                  style={{ padding: '0.6rem 1.35rem', fontSize: '0.85rem', fontWeight: 700 }}
                 >
                   <Check size={16} />
                   <span>Guardar Cambios</span>
                 </button>
               </div>
             </form>
+
           </div>
         </div>
       )}

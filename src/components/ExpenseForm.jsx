@@ -35,6 +35,7 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
   const [bank, setBank] = useState('');
   const [place, setPlace] = useState('');
   const [showMoreDetails, setShowMoreDetails] = useState(false);
+  const [showQuickPresets, setShowQuickPresets] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
 
   // Sync if parent currency changes
@@ -46,6 +47,26 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
     setFormCurrency(cur);
     if (onCurrencyChange) {
       onCurrencyChange(cur);
+    }
+  };
+
+  const handleCategoryChange = (newCat) => {
+    setCategory(newCat);
+    if (newCat === 'gastos-hormiga') {
+      setIsAntExpense(true);
+    } else {
+      setIsAntExpense(false);
+    }
+  };
+
+  const handleToggleAntExpense = (newChecked) => {
+    setIsAntExpense(newChecked);
+    if (newChecked) {
+      setCategory('gastos-hormiga');
+    } else {
+      if (category === 'gastos-hormiga') {
+        setCategory('otros');
+      }
     }
   };
 
@@ -166,28 +187,61 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
           </div>
         </div>
 
-        {/* Quick Presets for "Gastos Hormiga" */}
-        <div style={{ marginBottom: '1.25rem', background: 'rgba(245, 158, 11, 0.05)', padding: '0.75rem 0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(245, 158, 11, 0.15)' }}>
-          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#fef08a', marginBottom: '0.45rem', fontSize: '0.82rem' }}>
-            <Sparkles size={14} color="#f59e0b" />
-            <span>Accesos Rápidos Populares ({formCurrency === 'PEN' ? 'Soles S/' : 'Dólares $'})</span>
-          </label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-            {currentPresets.map((preset, idx) => (
-              <button
-                key={idx}
-                type="button"
-                className="chip chip-ant"
-                onClick={() => handleApplyPreset(preset)}
-                style={{ fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.35rem 0.65rem' }}
-              >
-                <span>{preset.label}</span>
-                <span style={{ fontWeight: '700', color: '#fef08a' }}>
-                  ({formCurrency === 'USD' ? '$' : 'S/'} {preset.amount})
-                </span>
-              </button>
-            ))}
-          </div>
+        {/* Quick Presets for "Gastos Hormiga" (Desplegable / Colapsable) */}
+        <div style={{
+          marginBottom: '1rem',
+          background: 'rgba(245, 158, 11, 0.04)',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid rgba(245, 158, 11, 0.18)',
+          overflow: 'hidden'
+        }}>
+          <button
+            type="button"
+            onClick={() => setShowQuickPresets(!showQuickPresets)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.65rem 0.85rem',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#fef08a',
+              fontFamily: 'inherit'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', fontWeight: 600 }}>
+              <Sparkles size={14} color="#f59e0b" />
+              <span>Atajos Rápidos de Gastos Hormiga 🐜</span>
+              <span style={{ fontSize: '0.72rem', color: 'rgba(254, 240, 138, 0.7)' }}>({currentPresets.length} opciones)</span>
+            </div>
+            {showQuickPresets ? <ChevronUp size={16} color="#f59e0b" /> : <ChevronDown size={16} color="#f59e0b" />}
+          </button>
+
+          {showQuickPresets && (
+            <div className="animate-fade-in" style={{ padding: '0.4rem 0.85rem 0.85rem 0.85rem', borderTop: '1px solid rgba(245, 158, 11, 0.1)' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                {currentPresets.map((preset, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className="chip chip-ant"
+                    onClick={() => {
+                      handleApplyPreset(preset);
+                      setShowQuickPresets(false);
+                    }}
+                    style={{ fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.35rem 0.65rem' }}
+                  >
+                    <span>{preset.label}</span>
+                    <span style={{ fontWeight: '700', color: '#fef08a' }}>
+                      ({formCurrency === 'USD' ? '$' : 'S/'} {preset.amount})
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -238,12 +292,7 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
               <label className="form-label" style={{ fontSize: '0.82rem' }}>Categoría</label>
               <select
                 value={category}
-                onChange={(e) => {
-                  setCategory(e.target.value);
-                  if (e.target.value === 'gastos-hormiga') {
-                    setIsAntExpense(true);
-                  }
-                }}
+                onChange={(e) => handleCategoryChange(e.target.value)}
                 className="form-select"
                 style={{ padding: '0.75rem 0.9rem' }}
               >
@@ -280,7 +329,7 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
             marginBottom: '1rem',
             cursor: 'pointer',
             transition: 'all 0.2s ease'
-          }} onClick={() => setIsAntExpense(!isAntExpense)}>
+          }} onClick={() => handleToggleAntExpense(!isAntExpense)}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
               <div style={{
                 width: '32px',
@@ -306,7 +355,7 @@ export default function ExpenseForm({ onAddExpense, categories = DEFAULT_CATEGOR
             <input
               type="checkbox"
               checked={isAntExpense}
-              onChange={(e) => setIsAntExpense(e.target.checked)}
+              onChange={(e) => handleToggleAntExpense(e.target.checked)}
               style={{ width: '18px', height: '18px', accentColor: '#f59e0b', cursor: 'pointer' }}
             />
           </div>

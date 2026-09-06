@@ -1,5 +1,5 @@
 import React from 'react';
-import { PiggyBank, Cloud, CloudOff, PlusCircle, LayoutDashboard, ListFilter, Settings, ArrowRightLeft, RefreshCw } from 'lucide-react';
+import { Bug, Cloud, CloudOff, PlusCircle, LayoutDashboard, ListFilter, Settings, ArrowRightLeft, RefreshCw, Wallet } from 'lucide-react';
 
 export default function Navbar({
   activeTab,
@@ -22,21 +22,22 @@ export default function Navbar({
               width: '42px',
               height: '42px',
               borderRadius: 'var(--radius-md)',
-              background: 'linear-gradient(135deg, var(--primary) 0%, #4f46e5 100%)',
+              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 50%, var(--primary) 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
+              boxShadow: '0 4px 14px rgba(245, 158, 11, 0.4)',
               flexShrink: 0
             }}>
-              <PiggyBank size={22} color="#fff" />
+              <Bug size={24} color="#fff" />
             </div>
             <div>
-              <h1 style={{ fontSize: '1.3rem', lineHeight: '1.1' }}>
-                Control<span style={{ color: 'var(--primary)' }}>Ahorro</span>
+              <h1 style={{ fontSize: '1.3rem', lineHeight: '1.1', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span>Save<span style={{ color: 'var(--primary)' }}>Ahorro</span></span>
+                <span style={{ fontSize: '1.1rem' }}>🐜</span>
               </h1>
               <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                Gastos Diarios & Hormiga 🐜
+                Gastos Hormiga & Liquidez Real
               </p>
             </div>
           </div>
@@ -129,6 +130,13 @@ export default function Navbar({
         >
           <ListFilter size={18} />
           <span>Historial de Gastos</span>
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'liquidity' ? 'active' : ''}`}
+          onClick={() => setActiveTab('liquidity')}
+        >
+          <Wallet size={18} />
+          <span>💼 Liquidez & Ahorros</span>
         </button>
       </div>
     </header>

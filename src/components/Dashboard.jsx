@@ -79,6 +79,13 @@ export default function Dashboard({
     }
   }, [exchangeRate, exchangeUpdatedAt]);
 
+  // Sync currency with top navbar
+  useEffect(() => {
+    if (currentCurrency === 'PEN' || currentCurrency === 'USD') {
+      setCurrencyMode(currentCurrency);
+    }
+  }, [currentCurrency]);
+
   const loadExchangeRate = async (forceRefresh = false) => {
     if (onRefreshExchangeRate) {
       setExchangeData(prev => ({ ...prev, loading: true }));

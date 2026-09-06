@@ -3,6 +3,7 @@ import Navbar from './components/Navbar';
 import ExpenseForm from './components/ExpenseForm';
 import Dashboard from './components/Dashboard';
 import ExpenseList from './components/ExpenseList';
+import LiquidityManager from './components/LiquidityManager';
 import CloudConfigModal from './components/CloudConfigModal';
 import {
   fetchExpenses,
@@ -16,7 +17,7 @@ import {
   setPreferredCurrency,
   fetchLiveExchangeRate
 } from './lib/supabaseClient';
-import { PlusCircle, LayoutDashboard, ListFilter, Cloud } from 'lucide-react';
+import { PlusCircle, LayoutDashboard, ListFilter, Cloud, Wallet } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('form');
@@ -140,7 +141,16 @@ export default function App() {
                 onDeleteExpense={handleDeleteExpense}
                 onUpdateExpense={handleUpdateExpense}
                 currentCurrency={currency}
+                onCurrencyChange={handleCurrencyChange}
                 exchangeRate={exchangeRate}
+              />
+            )}
+
+            {activeTab === 'liquidity' && (
+              <LiquidityManager
+                expenses={expenses}
+                exchangeRate={exchangeRate}
+                currentCurrency={currency}
               />
             )}
           </>
@@ -169,6 +179,13 @@ export default function App() {
         >
           <ListFilter size={20} />
           <span>Historial</span>
+        </button>
+        <button
+          className={`mobile-nav-item ${activeTab === 'liquidity' ? 'active' : ''}`}
+          onClick={() => setActiveTab('liquidity')}
+        >
+          <Wallet size={20} />
+          <span>Liquidez</span>
         </button>
         <button
           className="mobile-nav-item"
