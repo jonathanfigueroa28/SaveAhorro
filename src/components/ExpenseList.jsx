@@ -1,19 +1,49 @@
 import React, { useState, useMemo } from 'react';
-import { DEFAULT_CATEGORIES, formatMoney, formatLimaDate } from '../lib/supabaseClient';
-import { Search, Download, Trash2, Bug, Filter, Calendar, FileSpreadsheet } from 'lucide-react';
+import {
+  DEFAULT_CATEGORIES,
+  formatMoney,
+  formatLimaDate,
+  PAYMENT_METHODS,
+  PERU_BANKS,
+  getLimaNowIso
+} from '../lib/supabaseClient';
+import {
+  Search,
+  Download,
+  Trash2,
+  Bug,
+  Filter,
+  Calendar,
+  FileSpreadsheet,
+  Edit3,
+  X,
+  Check,
+  CreditCard,
+  Building,
+  MapPin,
+  Clock,
+  Layers
+} from 'lucide-react';
 
-export default function ExpenseList({ expenses, onDeleteExpense, categories = DEFAULT_CATEGORIES }) {
+export default function ExpenseList({ expenses, onDeleteExpense, onUpdateExpense, categories = DEFAULT_CATEGORIES }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedCurrency, setSelectedCurrency] = useState('all');
   const [onlyAnt, setOnlyAnt] = useState(false);
+  const [groupBy, setGroupBy] = useState('month'); // 'month', 'week', 'year', 'none'
+  const [editingExpense, setEditingExpense] = useState(null);
 
+  // Filtered Expenses
   const filteredExpenses = useMemo(() => {
     return expenses.filter(exp => {
-      // Search term filter
-      const descMatch = (exp.description || '').toLowerCase().includes(searchTerm.toLowerCase());
-      const catMatch = (exp.category || '').toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesSearch = descMatch || catMatch;
+      // Search term filter (includes description, category, bank, place, payment_method)
+      const term = searchTerm.toLowerCase();
+      const descMatch = (exp.description || '').toLowerCase().includes(term);
+      const catMatch = (exp.category || '').toLowerCase().includes(term);
+      const bankMatch = (exp.bank || '').toLowerCase().includes(term);
+      const placeMatch = (exp.place || '').toLowerCase().includes(term);
+      const methodMatch = (exp.payment_method || '').toLowerCase().includes(term);
+      const matchesSearch = descMatch || catMatch || bankMatch || placeMatch || methodMatch;
 
       // Category filter
       const matchesCategory = selectedCategory === 'all' || exp.category === selectedCategory;
@@ -29,11 +59,76 @@ export default function ExpenseList({ expenses, onDeleteExpense, categories = DE
     });
   }, [expenses, searchTerm, selectedCategory, selectedCurrency, onlyAnt]);
 
+  // Grouping logic (Semanas, Meses, Años o Todos)
+  const groupedData = useMemo(() => {
+    // Sort all expenses newest to oldest
+    const sorted = [...filteredExpenses].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    if (groupBy === 'none') {
+      const pen = sorted.filter(e => (e.currency || 'PEN') === 'PEN').reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+      const usd = sorted.filter(e => e.currency === 'USD').reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+      return [{
+        key: 'all',
+        title: 'Todos los Registros',
+        totalPEN: pen,
+        totalUSD: usd,
+        items: sorted
+      }];
+    }
+
+    const groups = {};
+
+    sorted.forEach(exp => {
+      const d = new Date(exp.date);
+      let groupKey = '';
+      let groupTitle = '';
+
+      if (groupBy === 'year') {
+        groupKey = formatLimaDate(d, { year: 'numeric' });
+        groupTitle = `Año ${groupKey}`;
+      } else if (groupBy === 'week') {
+        // Compute Monday of current week in Lima time
+        const dayOfWeek = d.getDay(); // 0 is Sunday, 1 is Monday
+        const diffToMonday = (dayOfWeek + 6) % 7;
+        const monday = new Date(d.getTime() - diffToMonday * 24 * 3600 * 1000);
+        const sunday = new Date(monday.getTime() + 6 * 24 * 3600 * 1000);
+        
+        groupKey = monday.toISOString().slice(0, 10);
+        groupTitle = `Semana: ${formatLimaDate(monday, { day: '2-digit', month: 'short' })} - ${formatLimaDate(sunday, { day: '2-digit', month: 'short', year: 'numeric' })}`;
+      } else {
+        // 'month' by default
+        groupKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        const monthName = formatLimaDate(d, { month: 'long', year: 'numeric' });
+        groupTitle = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+      }
+
+      if (!groups[groupKey]) {
+        groups[groupKey] = {
+          key: groupKey,
+          title: groupTitle,
+          totalPEN: 0,
+          totalUSD: 0,
+          items: []
+        };
+      }
+
+      const amt = parseFloat(exp.amount) || 0;
+      if (exp.currency === 'USD') {
+        groups[groupKey].totalUSD += amt;
+      } else {
+        groups[groupKey].totalPEN += amt;
+      }
+      groups[groupKey].items.push(exp);
+    });
+
+    return Object.values(groups);
+  }, [filteredExpenses, groupBy]);
+
   // Export to CSV Function
   const handleExportCSV = () => {
     if (filteredExpenses.length === 0) return;
 
-    const headers = ['ID', 'Fecha (Lima UTC-5)', 'Moneda', 'Monto', 'Categoria', 'Es Gasto Hormiga', 'Descripcion'];
+    const headers = ['ID', 'Fecha (Lima UTC-5)', 'Moneda', 'Monto', 'Categoria', 'Es Gasto Hormiga', 'Metodo de Pago', 'Banco', 'Lugar', 'Descripcion'];
     const rows = filteredExpenses.map(exp => [
       exp.id,
       formatLimaDate(exp.date, { dateStyle: 'short', timeStyle: 'short' }),
@@ -41,6 +136,9 @@ export default function ExpenseList({ expenses, onDeleteExpense, categories = DE
       exp.amount.toFixed(2),
       categories.find(c => c.id === exp.category)?.name || exp.category,
       exp.is_ant_expense ? 'SI' : 'NO',
+      exp.payment_method || 'No especificado',
+      exp.bank || '',
+      exp.place || '',
       `"${(exp.description || '').replace(/"/g, '""')}"`
     ]);
 
@@ -60,8 +158,46 @@ export default function ExpenseList({ expenses, onDeleteExpense, categories = DE
     return categories.find(c => c.id === catId) || { name: catId, color: '#64748b' };
   };
 
+  const getPaymentMethodBadge = (methodId) => {
+    const pm = PAYMENT_METHODS.find(m => m.id === methodId);
+    if (!pm) return null;
+    return (
+      <span style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '0.15rem 0.45rem',
+        borderRadius: 'var(--radius-sm)',
+        fontSize: '0.7rem',
+        fontWeight: 600,
+        background: 'rgba(255, 255, 255, 0.08)',
+        color: '#e2e8f0',
+        border: '1px solid var(--border-color)',
+        whiteSpace: 'nowrap'
+      }}>
+        {pm.name}
+      </span>
+    );
+  };
+
+  const handleSaveEdit = (e) => {
+    e.preventDefault();
+    if (!editingExpense || !onUpdateExpense) return;
+    onUpdateExpense(editingExpense.id, {
+      amount: parseFloat(editingExpense.amount),
+      currency: editingExpense.currency || 'PEN',
+      category: editingExpense.category,
+      description: editingExpense.description,
+      is_ant_expense: Boolean(editingExpense.is_ant_expense),
+      payment_method: editingExpense.payment_method || null,
+      bank: editingExpense.bank || null,
+      place: editingExpense.place || null,
+      date: new Date(editingExpense.date).toISOString()
+    });
+    setEditingExpense(null);
+  };
+
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in" style={{ width: '100%', maxWidth: '100%', overflowX: 'hidden' }}>
       
       {/* Header and Search Filters */}
       <div className="glass-card" style={{ padding: '1.25rem', marginBottom: '1.25rem' }}>
@@ -74,39 +210,76 @@ export default function ExpenseList({ expenses, onDeleteExpense, categories = DE
           marginBottom: '1rem'
         }}>
           <div>
-            <h2 style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <h2 style={{ fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span>Historial de Gastos</span>
               <span className="badge badge-regular">{filteredExpenses.length} registros</span>
             </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Busca, filtra y exporta todos tus movimientos.
+              Segmenta por semanas, meses o años y edita tus movimientos en cualquier momento.
             </p>
           </div>
 
           <button
             onClick={handleExportCSV}
             className="btn btn-secondary"
-            style={{ padding: '0.6rem 1rem', fontSize: '0.85rem' }}
+            style={{ padding: '0.55rem 0.9rem', fontSize: '0.82rem' }}
             disabled={filteredExpenses.length === 0}
           >
             <FileSpreadsheet size={16} color="var(--success)" />
-            <span>Exportar a Excel (CSV)</span>
+            <span>Exportar CSV</span>
           </button>
         </div>
 
-        {/* Filters Controls */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
+        {/* Segmentation Selector (Semanas, Meses, Años, Todo) */}
+        <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+            <Layers size={14} color="var(--primary)" /> Segmentar por:
+          </span>
+          <div style={{ display: 'flex', gap: '0.3rem', background: 'rgba(255,255,255,0.05)', padding: '0.2rem', borderRadius: 'var(--radius-md)', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setGroupBy('month')}
+              className={`chip ${groupBy === 'month' ? 'active' : ''}`}
+              style={{ fontSize: '0.78rem', padding: '0.35rem 0.75rem' }}
+            >
+              🗓️ Por Meses
+            </button>
+            <button
+              onClick={() => setGroupBy('week')}
+              className={`chip ${groupBy === 'week' ? 'active' : ''}`}
+              style={{ fontSize: '0.78rem', padding: '0.35rem 0.75rem' }}
+            >
+              📅 Por Semanas
+            </button>
+            <button
+              onClick={() => setGroupBy('year')}
+              className={`chip ${groupBy === 'year' ? 'active' : ''}`}
+              style={{ fontSize: '0.78rem', padding: '0.35rem 0.75rem' }}
+            >
+              📆 Por Años
+            </button>
+            <button
+              onClick={() => setGroupBy('none')}
+              className={`chip ${groupBy === 'none' ? 'active' : ''}`}
+              style={{ fontSize: '0.78rem', padding: '0.35rem 0.75rem' }}
+            >
+              📋 Todo Consolidado
+            </button>
+          </div>
+        </div>
+
+        {/* Filters Controls Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.65rem' }}>
           
           {/* Search Box */}
           <div style={{ position: 'relative' }}>
             <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)' }} />
             <input
               type="text"
-              placeholder="Buscar gasto o nota..."
+              placeholder="Buscar gasto, banco, lugar..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="form-input"
-              style={{ paddingLeft: '2.5rem', fontSize: '0.875rem' }}
+              style={{ paddingLeft: '2.5rem', fontSize: '0.85rem', padding: '0.65rem 0.65rem 0.65rem 2.5rem' }}
             />
           </div>
 
@@ -116,7 +289,7 @@ export default function ExpenseList({ expenses, onDeleteExpense, categories = DE
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
               className="form-select"
-              style={{ fontSize: '0.875rem' }}
+              style={{ fontSize: '0.85rem', padding: '0.65rem' }}
             >
               <option value="all">Todas las Categorías</option>
               {categories.map(cat => (
@@ -131,9 +304,9 @@ export default function ExpenseList({ expenses, onDeleteExpense, categories = DE
               value={selectedCurrency}
               onChange={(e) => setSelectedCurrency(e.target.value)}
               className="form-select"
-              style={{ fontSize: '0.875rem' }}
+              style={{ fontSize: '0.85rem', padding: '0.65rem' }}
             >
-              <option value="all">Todas las Monedas (S/ y $)</option>
+              <option value="all">Todas las Monedas</option>
               <option value="PEN">🇵🇪 Solo Soles (S/)</option>
               <option value="USD">💵 Solo Dólares ($)</option>
             </select>
@@ -143,107 +316,377 @@ export default function ExpenseList({ expenses, onDeleteExpense, categories = DE
           <button
             className={`btn ${onlyAnt ? 'btn-ant' : 'btn-secondary'}`}
             onClick={() => setOnlyAnt(!onlyAnt)}
-            style={{ fontSize: '0.85rem', padding: '0.6rem 1rem' }}
+            style={{ fontSize: '0.82rem', padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}
           >
-            <Bug size={16} />
-            <span>{onlyAnt ? 'Ver Todos los Gastos' : 'Filtrar Gastos Hormiga 🐜'}</span>
+            <Bug size={15} />
+            <span>{onlyAnt ? 'Ver Todos' : 'Solo Hormiga 🐜'}</span>
           </button>
 
         </div>
       </div>
 
-      {/* Expenses Table / Cards */}
-      <div className="glass-card" style={{ overflow: 'hidden' }}>
-        {filteredExpenses.length > 0 ? (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-              <thead>
-                <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
-                  <th style={{ padding: '0.85rem 1rem' }}>Fecha (Lima)</th>
-                  <th style={{ padding: '0.85rem 1rem' }}>Categoría</th>
-                  <th style={{ padding: '0.85rem 1rem' }}>Descripción / Nota</th>
-                  <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>Monto</th>
-                  <th style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredExpenses.map(exp => {
-                  const catInfo = getCategoryInfo(exp.category);
-                  const isAnt = exp.is_ant_expense || exp.category === 'gastos-hormiga';
-                  
-                  return (
-                    <tr key={exp.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background 0.2s' }}>
-                      
-                      {/* Date Column (Lima UTC-5) */}
-                      <td style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap' }}>
-                        <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>
-                          {formatLimaDate(exp.date, { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </div>
-                        <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
-                          {formatLimaDate(exp.date, { hour: '2-digit', minute: '2-digit', hour12: true })}
-                        </div>
-                      </td>
+      {/* Segmented Expenses List */}
+      {groupedData.length > 0 && filteredExpenses.length > 0 ? (
+        groupedData.map(group => (
+          <div key={group.key} className="glass-card" style={{ marginBottom: '1.5rem', overflow: 'hidden' }}>
+            
+            {/* Group Header with Subtotals */}
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.04)',
+              borderBottom: '1px solid var(--border-color)',
+              padding: '0.85rem 1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '0.5rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#fff' }}>
+                  {group.title}
+                </span>
+                <span className="badge badge-regular" style={{ fontSize: '0.7rem' }}>
+                  {group.items.length} gastos
+                </span>
+              </div>
 
-                      {/* Category Column */}
-                      <td style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap' }}>
-                        <span style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.4rem',
-                          padding: '0.25rem 0.6rem',
-                          borderRadius: 'var(--radius-full)',
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                          backgroundColor: `${catInfo.color}20`,
-                          color: catInfo.color,
-                          border: `1px solid ${catInfo.color}40`
-                        }}>
-                          {catInfo.name}
-                        </span>
-                      </td>
+              {/* Group Subtotals */}
+              <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.85rem', fontWeight: 700 }}>
+                {group.totalPEN > 0 && (
+                  <span style={{ color: 'var(--primary)' }}>
+                    Soles: {formatMoney(group.totalPEN, 'PEN')}
+                  </span>
+                )}
+                {group.totalUSD > 0 && (
+                  <span style={{ color: '#10b981' }}>
+                    Dólares: {formatMoney(group.totalUSD, 'USD')}
+                  </span>
+                )}
+              </div>
+            </div>
 
-                      {/* Description Column */}
-                      <td style={{ padding: '0.85rem 1rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                          <span>{exp.description || 'Sin nota'}</span>
-                          {isAnt && (
-                            <span className="badge badge-ant" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>
-                              🐜 Hormiga
+            {/* Expenses Table in this group */}
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                    <th style={{ padding: '0.75rem 1rem' }}>Fecha</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Detalle / Categoría</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Método / Banco</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Monto</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.items.map(exp => {
+                    const catInfo = getCategoryInfo(exp.category);
+                    const isAnt = exp.is_ant_expense || exp.category === 'gastos-hormiga';
+                    
+                    return (
+                      <tr key={exp.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background 0.2s' }}>
+                        
+                        {/* Date Column */}
+                        <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>
+                          <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>
+                            {formatLimaDate(exp.date, { day: '2-digit', month: 'short' })}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                            {formatLimaDate(exp.date, { hour: '2-digit', minute: '2-digit', hour12: true })}
+                          </div>
+                        </td>
+
+                        {/* Description & Category Column */}
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <div style={{ fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            <span>{exp.description || catInfo.name}</span>
+                            {isAnt && (
+                              <span className="badge badge-ant" style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}>
+                                🐜 Hormiga
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem', flexWrap: 'wrap' }}>
+                            <span style={{
+                              fontSize: '0.7rem',
+                              color: catInfo.color,
+                              background: `${catInfo.color}15`,
+                              padding: '0.1rem 0.4rem',
+                              borderRadius: '4px'
+                            }}>
+                              {catInfo.name}
                             </span>
-                          )}
-                        </div>
-                      </td>
+                            {exp.place && (
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                                <MapPin size={11} /> {exp.place}
+                              </span>
+                            )}
+                          </div>
+                        </td>
 
-                      {/* Amount Column formatted in Soles or Dollars */}
-                      <td style={{ padding: '0.85rem 1rem', textAlign: 'right', fontWeight: '700', fontSize: '1rem', color: isAnt ? '#fef08a' : '#fff', whiteSpace: 'nowrap' }}>
-                        {formatMoney(exp.amount, exp.currency || 'PEN')}
-                      </td>
+                        {/* Payment Method & Bank */}
+                        <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                            {getPaymentMethodBadge(exp.payment_method) || (
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>—</span>
+                            )}
+                            {exp.bank && (
+                              <span style={{ fontSize: '0.7rem', color: '#93c5fd', background: 'rgba(59, 130, 246, 0.15)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
+                                {exp.bank}
+                              </span>
+                            )}
+                          </div>
+                        </td>
 
-                      {/* Actions Column */}
-                      <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
-                        <button
-                          onClick={() => onDeleteExpense(exp.id)}
-                          className="btn btn-danger"
-                          style={{ padding: '0.4rem 0.6rem', borderRadius: 'var(--radius-sm)' }}
-                          title="Eliminar gasto"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </td>
+                        {/* Amount Column */}
+                        <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '700', fontSize: '0.98rem', color: isAnt ? '#fef08a' : '#fff', whiteSpace: 'nowrap' }}>
+                          {formatMoney(exp.amount, exp.currency || 'PEN')}
+                        </td>
 
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        {/* Actions: Edit & Delete */}
+                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'inline-flex', gap: '0.35rem' }}>
+                            <button
+                              onClick={() => setEditingExpense({
+                                ...exp,
+                                date: exp.date ? new Date(exp.date).toISOString().slice(0, 16) : getLimaNowIso()
+                              })}
+                              className="btn btn-secondary"
+                              style={{ padding: '0.35rem 0.55rem', borderRadius: 'var(--radius-sm)' }}
+                              title="Editar gasto"
+                            >
+                              <Edit3 size={14} color="var(--primary)" />
+                            </button>
+                            <button
+                              onClick={() => onDeleteExpense(exp.id)}
+                              className="btn btn-danger"
+                              style={{ padding: '0.35rem 0.55rem', borderRadius: 'var(--radius-sm)' }}
+                              title="Eliminar gasto"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
           </div>
-        ) : (
-          <div style={{ textAlign: 'center', padding: '3.5rem 1rem', color: 'var(--text-muted)' }}>
-            <p style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.5rem' }}>No se encontraron gastos</p>
-            <p style={{ fontSize: '0.85rem' }}>Prueba cambiando los filtros de búsqueda o agrega un nuevo gasto.</p>
+        ))
+      ) : (
+        <div className="glass-card" style={{ textAlign: 'center', padding: '3.5rem 1rem', color: 'var(--text-muted)' }}>
+          <p style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.5rem' }}>No se encontraron gastos</p>
+          <p style={{ fontSize: '0.85rem' }}>Prueba cambiando los filtros de búsqueda o registra un gasto nuevo.</p>
+        </div>
+      )}
+
+      {/* MODAL DE EDICIÓN SENCILLA */}
+      {editingExpense && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(5, 8, 15, 0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem'
+        }}>
+          <div className="glass-card animate-fade-in" style={{
+            width: '100%',
+            maxWidth: '540px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            padding: '1.5rem',
+            position: 'relative'
+          }}>
+            <button
+              onClick={() => setEditingExpense(null)}
+              style={{
+                position: 'absolute',
+                top: '1rem',
+                right: '1rem',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-muted)',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <X size={16} />
+            </button>
+
+            <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Edit3 size={18} color="var(--primary)" />
+              <span>Editar Gasto</span>
+            </h3>
+
+            <form onSubmit={handleSaveEdit}>
+              {/* Currency & Amount */}
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                <div style={{ width: '120px' }}>
+                  <label className="form-label" style={{ fontSize: '0.78rem' }}>Moneda</label>
+                  <select
+                    value={editingExpense.currency || 'PEN'}
+                    onChange={(e) => setEditingExpense({ ...editingExpense, currency: e.target.value })}
+                    className="form-select"
+                  >
+                    <option value="PEN">🇵🇪 S/ Soles</option>
+                    <option value="USD">💵 $ Dólares</option>
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label className="form-label" style={{ fontSize: '0.78rem' }}>Monto</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={editingExpense.amount}
+                    onChange={(e) => setEditingExpense({ ...editingExpense, amount: e.target.value })}
+                    className="form-input"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Description & Category */}
+              <div style={{ marginBottom: '1rem' }}>
+                <label className="form-label" style={{ fontSize: '0.78rem' }}>Detalle / Descripción</label>
+                <input
+                  type="text"
+                  value={editingExpense.description || ''}
+                  onChange={(e) => setEditingExpense({ ...editingExpense, description: e.target.value })}
+                  className="form-input"
+                  placeholder="Ej: Almuerzo, Taxi, Café..."
+                />
+              </div>
+
+              <div className="grid-2" style={{ marginBottom: '1rem' }}>
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.78rem' }}>Categoría</label>
+                  <select
+                    value={editingExpense.category}
+                    onChange={(e) => setEditingExpense({ ...editingExpense, category: e.target.value })}
+                    className="form-select"
+                  >
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.78rem' }}>Fecha y Hora (Lima)</label>
+                  <input
+                    type="datetime-local"
+                    value={editingExpense.date}
+                    onChange={(e) => setEditingExpense({ ...editingExpense, date: e.target.value })}
+                    className="form-input"
+                  />
+                </div>
+              </div>
+
+              {/* Gasto Hormiga Checkbox */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.6rem',
+                background: 'rgba(255,255,255,0.03)',
+                padding: '0.65rem 0.85rem',
+                borderRadius: 'var(--radius-md)',
+                marginBottom: '1rem',
+                cursor: 'pointer'
+              }} onClick={() => setEditingExpense({ ...editingExpense, is_ant_expense: !editingExpense.is_ant_expense })}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(editingExpense.is_ant_expense)}
+                  onChange={(e) => setEditingExpense({ ...editingExpense, is_ant_expense: e.target.checked })}
+                  style={{ width: '16px', height: '16px', accentColor: '#f59e0b' }}
+                />
+                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                  Marcar como Gasto Hormiga 🐜
+                </span>
+              </div>
+
+              {/* Método de pago */}
+              <div style={{ marginBottom: '1rem' }}>
+                <label className="form-label" style={{ fontSize: '0.78rem' }}>Método de Pago</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                  {PAYMENT_METHODS.map(pm => (
+                    <button
+                      key={pm.id}
+                      type="button"
+                      onClick={() => setEditingExpense({ ...editingExpense, payment_method: editingExpense.payment_method === pm.id ? '' : pm.id })}
+                      className={`chip ${editingExpense.payment_method === pm.id ? 'active' : ''}`}
+                      style={{ fontSize: '0.75rem', padding: '0.3rem 0.55rem' }}
+                    >
+                      {pm.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Banco y Lugar */}
+              <div className="grid-2" style={{ marginBottom: '1.25rem' }}>
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.78rem' }}>Banco (Opcional)</label>
+                  <select
+                    value={editingExpense.bank || ''}
+                    onChange={(e) => setEditingExpense({ ...editingExpense, bank: e.target.value })}
+                    className="form-select"
+                  >
+                    <option value="">Ninguno / No aplica</option>
+                    {PERU_BANKS.map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.78rem' }}>Lugar / Establecimiento</label>
+                  <input
+                    type="text"
+                    value={editingExpense.place || ''}
+                    onChange={(e) => setEditingExpense({ ...editingExpense, place: e.target.value })}
+                    className="form-input"
+                    placeholder="Ej: Tambo, Metro, Grifo..."
+                  />
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setEditingExpense(null)}
+                  className="btn btn-secondary"
+                  style={{ padding: '0.65rem 1rem', fontSize: '0.85rem' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ padding: '0.65rem 1.25rem', fontSize: '0.85rem' }}
+                >
+                  <Check size={16} />
+                  <span>Guardar Cambios</span>
+                </button>
+              </div>
+            </form>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
     </div>
   );

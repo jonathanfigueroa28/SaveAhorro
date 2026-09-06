@@ -82,6 +82,83 @@ export const ANT_PRESETS_BY_CURRENCY = {
   ]
 };
 
+export const PAYMENT_METHODS = [
+  { id: 'efectivo', name: '💵 Efectivo', icon: 'Coins' },
+  { id: 'yape', name: '🟣 Yape', icon: 'Smartphone' },
+  { id: 'plin', name: '🔵 Plin', icon: 'Zap' },
+  { id: 'debito', name: '💳 Tarjeta Débito', icon: 'CreditCard' },
+  { id: 'credito', name: '💳 Tarjeta Crédito', icon: 'CreditCard' },
+  { id: 'transferencia', name: '🏦 Transferencia', icon: 'Building2' },
+  { id: 'otro', name: 'Otro', icon: 'HelpCircle' }
+];
+
+export const PERU_BANKS = [
+  'BCP',
+  'Interbank',
+  'BBVA',
+  'Scotiabank',
+  'Banco de la Nación',
+  'Falabella',
+  'Ripley',
+  'BanBif',
+  'Pichincha',
+  'Caja Arequipa',
+  'Caja Huancayo',
+  'Otro'
+];
+
+const LOCAL_STORAGE_KEY_EXCHANGE = 'control_ahorro_exchange_rate_v1';
+
+// Consulta en tiempo real de la tasa de cambio de mercado USD -> PEN (Google reference rate)
+export const fetchLiveExchangeRate = async () => {
+  try {
+    const cachedStr = localStorage.getItem(LOCAL_STORAGE_KEY_EXCHANGE);
+    if (cachedStr) {
+      const cached = JSON.parse(cachedStr);
+      // Caché válido por 30 minutos
+      if (Date.now() - cached.timestamp < 30 * 60 * 1000 && cached.rate) {
+        return cached;
+      }
+    }
+
+    const res = await fetch('https://open.er-api.com/v6/latest/USD');
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.rates?.PEN) {
+        const result = {
+          rate: parseFloat(data.rates.PEN),
+          updatedAt: new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }),
+          timestamp: Date.now()
+        };
+        localStorage.setItem(LOCAL_STORAGE_KEY_EXCHANGE, JSON.stringify(result));
+        return result;
+      }
+    }
+  } catch (e) {
+    console.warn('Fallo consulta API de cambio 1, intentando secundaria:', e);
+  }
+
+  try {
+    const res2 = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+    if (res2.ok) {
+      const data2 = await res2.json();
+      if (data2?.rates?.PEN) {
+        const result = {
+          rate: parseFloat(data2.rates.PEN),
+          updatedAt: new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }),
+          timestamp: Date.now()
+        };
+        localStorage.setItem(LOCAL_STORAGE_KEY_EXCHANGE, JSON.stringify(result));
+        return result;
+      }
+    }
+  } catch (e) {
+    console.warn('Fallo consulta API secundaria de cambio:', e);
+  }
+
+  return { rate: 3.75, updatedAt: 'Estimado', timestamp: Date.now() };
+};
+
 const LOCAL_STORAGE_KEY_EXPENSES = 'control_ahorro_expenses_v1';
 const LOCAL_STORAGE_KEY_CONFIG = 'control_ahorro_config_v1';
 const LOCAL_STORAGE_KEY_BUDGET = 'control_ahorro_budget_v1';
@@ -193,8 +270,11 @@ export const saveExpense = async (expense) => {
     category: expense.category,
     description: expense.description || '',
     is_ant_expense: Boolean(expense.is_ant_expense),
+    payment_method: expense.payment_method || null,
+    bank: expense.bank || null,
+    place: expense.place || null,
     date: expense.date || new Date().toISOString(),
-    created_at: new Date().toISOString()
+    created_at: expense.created_at || new Date().toISOString()
   };
 
   // Local storage save first
@@ -208,12 +288,20 @@ export const saveExpense = async (expense) => {
   const client = getSupabaseClient();
   if (client) {
     try {
-      // Intentar guardar con la columna currency
+      // Intentar guardar con todas las columnas
       let { error } = await client.from('expenses').upsert([newExpense]);
-      // Si la columna currency aún no ha sido agregada en la tabla de Supabase, reintentar sin romper el guardado
-      if (error && (error.code === 'PGRST204' || error.message?.includes('currency'))) {
-        const { currency, ...payloadWithoutCurrency } = newExpense;
-        const retry = await client.from('expenses').upsert([payloadWithoutCurrency]);
+      // Si faltan columnas nuevas en la tabla de Supabase (código PGRST204), reintentar con columnas base
+      if (error && (error.code === 'PGRST204' || error.message?.includes('column'))) {
+        const basePayload = {
+          id: newExpense.id,
+          amount: newExpense.amount,
+          category: newExpense.category,
+          description: newExpense.description,
+          is_ant_expense: newExpense.is_ant_expense,
+          date: newExpense.date,
+          created_at: newExpense.created_at
+        };
+        const retry = await client.from('expenses').upsert([basePayload]);
         error = retry.error;
       }
 
@@ -228,6 +316,52 @@ export const saveExpense = async (expense) => {
   }
 
   return { expense: newExpense, cloudError, isCloudEnabled: Boolean(client) };
+};
+
+export const updateExpense = async (id, updatedFields) => {
+  const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_EXPENSES);
+  let existing = existingStr ? JSON.parse(existingStr) : [];
+  let updatedExpense = null;
+
+  existing = existing.map(item => {
+    if (item.id === id) {
+      updatedExpense = { ...item, ...updatedFields };
+      return updatedExpense;
+    }
+    return item;
+  });
+
+  localStorage.setItem(LOCAL_STORAGE_KEY_EXPENSES, JSON.stringify(existing));
+
+  let cloudError = null;
+  const client = getSupabaseClient();
+  if (client && updatedExpense) {
+    try {
+      let { error } = await client.from('expenses').upsert([updatedExpense]);
+      if (error && (error.code === 'PGRST204' || error.message?.includes('column'))) {
+        const basePayload = {
+          id: updatedExpense.id,
+          amount: updatedExpense.amount,
+          category: updatedExpense.category,
+          description: updatedExpense.description,
+          is_ant_expense: updatedExpense.is_ant_expense,
+          date: updatedExpense.date,
+          created_at: updatedExpense.created_at
+        };
+        const retry = await client.from('expenses').upsert([basePayload]);
+        error = retry.error;
+      }
+      if (error) {
+        console.error('Supabase update error:', error);
+        cloudError = error.message;
+      }
+    } catch (err) {
+      console.error('Supabase update exception:', err);
+      cloudError = err.message;
+    }
+  }
+
+  return { expense: updatedExpense, cloudError };
 };
 
 export const deleteExpense = async (id) => {

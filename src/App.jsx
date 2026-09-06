@@ -7,6 +7,7 @@ import CloudConfigModal from './components/CloudConfigModal';
 import {
   fetchExpenses,
   saveExpense,
+  updateExpense,
   deleteExpense,
   getMonthlyBudget,
   setMonthlyBudget as saveMonthlyBudget,
@@ -52,6 +53,13 @@ export default function App() {
     const result = await saveExpense(expenseData);
     const saved = result.expense || result;
     setExpenses(prev => [saved, ...prev.filter(e => e.id !== saved.id)]);
+    return result;
+  };
+
+  const handleUpdateExpense = async (id, updatedFields) => {
+    const result = await updateExpense(id, updatedFields);
+    const updated = result.expense || { id, ...updatedFields };
+    setExpenses(prev => prev.map(e => (e.id === id ? { ...e, ...updated } : e)));
     return result;
   };
 
@@ -109,6 +117,8 @@ export default function App() {
               <ExpenseList
                 expenses={expenses}
                 onDeleteExpense={handleDeleteExpense}
+                onUpdateExpense={handleUpdateExpense}
+                currentCurrency={currency}
               />
             )}
           </>
