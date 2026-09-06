@@ -14,7 +14,8 @@ export default function Navbar({
   userProfile,
   onOpenProfileModal,
   onOpenTutorial,
-  onShowLanding
+  onShowLanding,
+  onLogout
 }) {
   return (
     <header style={{ marginBottom: '1.25rem' }}>
@@ -48,41 +49,73 @@ export default function Navbar({
 
           {/* User Profile & Cloud status row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-            {/* Friendly Greeting & Name editor */}
-            <button
-              onClick={onOpenProfileModal}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                background: 'rgba(99, 102, 241, 0.12)',
-                border: '1px solid rgba(99, 102, 241, 0.28)',
-                borderRadius: 'var(--radius-md)',
-                padding: '0.35rem 0.65rem',
-                cursor: 'pointer',
-                color: '#fff',
-                transition: 'all 0.2s ease'
-              }}
-              title="Haz clic para editar tu nombre y apellidos"
-            >
-              <div style={{
-                width: '24px',
-                height: '24px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, var(--primary), #8b5cf6)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                fontSize: '0.75rem',
-                fontWeight: 700
-              }}>
-                {userProfile?.firstName ? userProfile.firstName.charAt(0).toUpperCase() : 'J'}
-              </div>
-              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#e0e7ff' }}>
-                Hola, {userProfile?.firstName || 'Jonathan'} 👋
-              </span>
-            </button>
+            {/* Friendly Greeting & Name editor with Logout */}
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              background: 'rgba(99, 102, 241, 0.12)',
+              border: '1px solid rgba(99, 102, 241, 0.28)',
+              borderRadius: 'var(--radius-md)',
+              padding: '0.2rem 0.4rem',
+              gap: '0.25rem'
+            }}>
+              <button
+                onClick={onOpenProfileModal}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#fff',
+                  padding: '0.15rem 0.35rem'
+                }}
+                title="Haz clic para editar tu nombre y apellidos"
+              >
+                <div style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, var(--primary), #8b5cf6)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  fontSize: '0.75rem',
+                  fontWeight: 700
+                }}>
+                  {userProfile?.firstName ? userProfile.firstName.charAt(0).toUpperCase() : 'J'}
+                </div>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#e0e7ff' }}>
+                  Hola, {userProfile?.firstName || 'Jonathan'} 👋
+                </span>
+              </button>
+
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    borderRadius: '6px',
+                    color: '#fca5a5',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '28px',
+                    height: '28px',
+                    padding: 0,
+                    transition: 'all 0.2s ease'
+                  }}
+                  title="Cerrar sesión / Salir a la portada"
+                  aria-label="Cerrar sesión"
+                >
+                  <LogOut size={14} color="#fca5a5" />
+                </button>
+              )}
+            </div>
 
             {/* Tutorial Button */}
             {onOpenTutorial && (

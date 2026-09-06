@@ -138,8 +138,14 @@ export default function App() {
   }, []);
 
   const handleLogout = async () => {
-    await signOutUser();
+    try {
+      await signOutUser();
+    } catch (err) {
+      console.warn('Sign out warning:', err);
+    }
+    localStorage.removeItem('saveahorro_view_mode');
     setCurrentUser(null);
+    setViewMode('landing');
     loadData();
   };
 
@@ -338,6 +344,7 @@ export default function App() {
         onOpenProfileModal={() => !isDemo && setIsProfileModalOpen(true)}
         onOpenTutorial={() => setIsTourOpen(true)}
         onShowLanding={() => setViewMode('landing')}
+        onLogout={handleLogout}
       />
 
       {/* Main Content Area */}
@@ -439,6 +446,7 @@ export default function App() {
         onClose={() => setIsProfileModalOpen(false)}
         userProfile={userProfile}
         onSaveProfile={handleSaveProfile}
+        onLogout={handleLogout}
       />
 
       {/* Cloud Configuration Modal */}

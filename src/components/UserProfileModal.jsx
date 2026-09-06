@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { User, Check, X, Sparkles } from 'lucide-react';
+import { User, Check, X, Sparkles, LogOut } from 'lucide-react';
 
-export default function UserProfileModal({ isOpen, onClose, userProfile, onSaveProfile }) {
+export default function UserProfileModal({ isOpen, onClose, userProfile, onSaveProfile, onLogout }) {
   const [firstName, setFirstName] = useState(userProfile.firstName || 'Jonathan');
   const [lastName, setLastName] = useState(userProfile.lastName || 'Figueroa');
 
@@ -126,6 +126,49 @@ export default function UserProfileModal({ isOpen, onClose, userProfile, onSaveP
             </button>
           </div>
         </form>
+
+        {onLogout && (
+          <div style={{
+            marginTop: '1.25rem',
+            paddingTop: '1rem',
+            borderTop: '1px solid var(--border-color)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                Sesión Activa
+              </div>
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: 0 }}>
+                Salir a la portada o cambiar de usuario
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onLogout();
+              }}
+              className="btn"
+              style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#fca5a5',
+                padding: '0.45rem 0.85rem',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                cursor: 'pointer'
+              }}
+            >
+              <LogOut size={14} />
+              <span>Cerrar Sesión</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
