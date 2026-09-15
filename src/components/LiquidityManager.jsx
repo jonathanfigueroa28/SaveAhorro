@@ -32,8 +32,18 @@ import {
   Square,
   Sparkles,
   Smartphone,
-  Coins
+  Coins,
+  Briefcase,
+  Receipt,
+  HelpCircle,
+  Percent
 } from 'lucide-react';
+import {
+  WORK_REGIMES,
+  PENSION_SYSTEMS,
+  PERU_UIT,
+  calculatePeruPayroll
+} from '../lib/peruPayroll';
 
 export default function LiquidityManager({
   expenses = [],
@@ -201,11 +211,41 @@ export default function LiquidityManager({
     }
   };
 
+  // Real-time Peruvian Payroll Calculation preview in modal
+  const payrollPreview = useMemo(() => {
+    if (!incomeModal) return null;
+    const gross = parseFloat(incomeModal.gross_salary || incomeModal.amount) || 0;
+    return calculatePeruPayroll({
+      grossSalary: gross,
+      regime: incomeModal.regime || (incomeModal.currency === 'USD' ? 'neto_directo' : 'planilla_general'),
+      pensionSystemId: incomeModal.pension_system_id || 'afp_integra',
+      hasSuspension4ta: Boolean(incomeModal.has_suspension_4ta),
+      currency: incomeModal.currency || 'PEN'
+    });
+  }, [incomeModal?.gross_salary, incomeModal?.amount, incomeModal?.regime, incomeModal?.pension_system_id, incomeModal?.has_suspension_4ta, incomeModal?.currency]);
+
   // Handlers for Incomes
   const handleSaveIncomeModal = async (e) => {
     e.preventDefault();
     if (!incomeModal) return;
-    const saved = await saveIncome(incomeModal);
+
+    let finalAmount = parseFloat(incomeModal.amount) || 0;
+    const regime = incomeModal.regime || (incomeModal.currency === 'USD' ? 'neto_directo' : 'planilla_general');
+
+    if (regime !== 'neto_directo' && incomeModal.currency === 'PEN' && payrollPreview) {
+      finalAmount = payrollPreview.netSalary;
+    }
+
+    const payload = {
+      ...incomeModal,
+      amount: finalAmount,
+      gross_salary: incomeModal.gross_salary ? parseFloat(incomeModal.gross_salary) : finalAmount,
+      regime: regime,
+      pension_system_id: incomeModal.pension_system_id || 'afp_integra',
+      has_suspension_4ta: Boolean(incomeModal.has_suspension_4ta)
+    };
+
+    const saved = await saveIncome(payload);
     if (onIncomesChange) {
       onIncomesChange(prev => {
         const exists = prev.some(i => i.id === saved.id);
@@ -262,43 +302,64 @@ export default function LiquidityManager({
     <div className="animate-fade-in" style={{ width: '100%', maxWidth: '1000px', margin: '0 auto' }}>
       
       {/* 3 HERO METRICS CARDS (Top Priority View) */}
+      {/* 3 HERO METRICS CARDS (Top Priority View - Pastel & High Contrast) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
         
         {/* HERO 1: Dinero Disponible Hoy */}
-        <div className="glass-card" style={{
+        <div className="card" style={{
           padding: '1.25rem',
-          borderLeft: '4px solid var(--primary)',
-          position: 'relative'
+          borderLeft: '4px solid #0284c7',
+          background: '#ffffff',
+          boxShadow: 'var(--shadow-sm)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <Wallet size={15} color="var(--primary)" /> Dinero Disponible Hoy
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <Wallet size={15} color="#0284c7" /> Dinero Disponible Hoy
             </span>
-            <span className="badge badge-primary" style={{ fontSize: '0.68rem' }}>En Mano</span>
+            <span style={{
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              padding: '0.2rem 0.5rem',
+              borderRadius: 'var(--radius-sm)',
+              background: '#e0f2fe',
+              color: '#0369a1',
+              border: '1px solid #bae6fd'
+            }}>
+              En Mano
+            </span>
           </div>
-          <div style={{ fontSize: '1.9rem', fontWeight: 800, color: '#fff', marginTop: '0.4rem' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-main)', marginTop: '0.4rem', letterSpacing: '-0.5px' }}>
             {formatMoney(availableCashTodayPEN, 'PEN')}
           </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem', margin: '0.2rem 0 0 0' }}>
             Efectivo y cuentas operativas (Yape, Plin, BCP) con gastos ya restados.
           </p>
         </div>
 
         {/* HERO 2: Ahorros de Reserva Intocables */}
-        <div className="glass-card" style={{
+        <div className="card" style={{
           padding: '1.25rem',
-          borderLeft: '4px solid #10b981',
-          position: 'relative'
+          borderLeft: '4px solid #15803d',
+          background: '#ffffff',
+          boxShadow: 'var(--shadow-sm)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#6ee7b7', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <PiggyBank size={15} color="#10b981" /> Ahorros de Reserva
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#15803d', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <PiggyBank size={15} color="#15803d" /> Ahorros de Reserva
             </span>
-            <span style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.15)', color: '#6ee7b7', fontWeight: 700 }}>
-              Intocables 🛡️
+            <span style={{
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              padding: '0.2rem 0.5rem',
+              borderRadius: 'var(--radius-sm)',
+              background: '#dcfce7',
+              color: '#15803d',
+              border: '1px solid #bbf7d0'
+            }}>
+              Intocables
             </span>
           </div>
-          <div style={{ fontSize: '1.9rem', fontWeight: 800, color: '#10b981', marginTop: '0.4rem' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 900, color: '#15803d', marginTop: '0.4rem', letterSpacing: '-0.5px' }}>
             {formatMoney(totalReserveSavingsInPEN, 'PEN')}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
@@ -306,85 +367,89 @@ export default function LiquidityManager({
           </div>
         </div>
 
-        {/* HERO 3: Liquidez Libre Proyectada del Próximo Mes */}
-        <div className="glass-card" style={{
+        {/* HERO 3: Liquidez Libre Proyectada del Próximo Mes (Pastel Suave, sin degradado oscuro) */}
+        <div className="card" style={{
           padding: '1.25rem',
-          borderLeft: `4px solid ${projectedFreeLiquidityNextMonth >= 0 ? 'var(--success)' : 'var(--danger)'}`,
-          background: projectedFreeLiquidityNextMonth >= 0
-            ? 'radial-gradient(ellipse at top right, rgba(16, 185, 129, 0.12), rgba(18, 24, 40, 0.85))'
-            : 'radial-gradient(ellipse at top right, rgba(239, 68, 68, 0.12), rgba(18, 24, 40, 0.85))'
+          borderLeft: `4px solid ${projectedFreeLiquidityNextMonth >= 0 ? '#15803d' : '#be123c'}`,
+          background: projectedFreeLiquidityNextMonth >= 0 ? '#f0fdf4' : '#fff1f2',
+          border: `1px solid ${projectedFreeLiquidityNextMonth >= 0 ? '#bbf7d0' : '#fecdd3'}`,
+          boxShadow: 'var(--shadow-sm)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <span style={{
               fontSize: '0.8rem',
               fontWeight: 700,
-              color: projectedFreeLiquidityNextMonth >= 0 ? 'var(--success)' : 'var(--danger)',
+              color: projectedFreeLiquidityNextMonth >= 0 ? '#166534' : '#9f1239',
               textTransform: 'uppercase',
               display: 'flex',
               alignItems: 'center',
               gap: '0.35rem'
             }}>
-              {projectedFreeLiquidityNextMonth >= 0 ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
+              {projectedFreeLiquidityNextMonth >= 0 ? <CheckCircle2 size={15} color="#15803d" /> : <AlertTriangle size={15} color="#be123c" />}
               Liquidez Libre Próx. Mes
             </span>
             <span style={{
-              fontSize: '0.68rem',
-              padding: '0.15rem 0.45rem',
-              borderRadius: '4px',
-              background: projectedFreeLiquidityNextMonth >= 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-              color: projectedFreeLiquidityNextMonth >= 0 ? 'var(--success)' : 'var(--danger)',
-              fontWeight: 700
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              padding: '0.2rem 0.5rem',
+              borderRadius: 'var(--radius-sm)',
+              background: projectedFreeLiquidityNextMonth >= 0 ? '#dcfce7' : '#ffe4e6',
+              color: projectedFreeLiquidityNextMonth >= 0 ? '#15803d' : '#9f1239',
+              border: `1px solid ${projectedFreeLiquidityNextMonth >= 0 ? '#bbf7d0' : '#fecdd3'}`
             }}>
-              {projectedFreeLiquidityNextMonth >= 0 ? 'Superávit 🟢' : 'Déficit 🔴'}
+              {projectedFreeLiquidityNextMonth >= 0 ? 'Superávit' : 'Déficit'}
             </span>
           </div>
           <div style={{
-            fontSize: '1.9rem',
-            fontWeight: 800,
-            color: projectedFreeLiquidityNextMonth >= 0 ? '#fff' : '#fca5a5',
-            marginTop: '0.4rem'
+            fontSize: '2rem',
+            fontWeight: 900,
+            color: projectedFreeLiquidityNextMonth >= 0 ? '#15803d' : '#be123c',
+            marginTop: '0.4rem',
+            letterSpacing: '-0.5px'
           }}>
             {formatMoney(projectedFreeLiquidityNextMonth, 'PEN')}
           </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+          <p style={{ fontSize: '0.75rem', color: projectedFreeLiquidityNextMonth >= 0 ? '#166534' : '#9f1239', marginTop: '0.2rem', margin: '0.2rem 0 0 0' }}>
             Dinero real que te sobrará tras cobrar sueldos y pagar TC y gastos fijos.
           </p>
         </div>
 
       </div>
 
-      {/* Summary Formula Bar */}
-      <div className="glass-card" style={{
+      {/* Summary Formula Bar (Pastel Claro y Legible) */}
+      <div className="card" style={{
         padding: '0.85rem 1.25rem',
         marginBottom: '1.5rem',
-        fontSize: '0.8rem',
+        fontSize: '0.82rem',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
-        gap: '0.75rem'
+        gap: '0.75rem',
+        background: '#ffffff',
+        border: '1px solid var(--border-color)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
           <div>
             <span style={{ color: 'var(--text-muted)' }}>1. Saldo Hoy: </span>
-            <strong style={{ color: '#fff' }}>S/ {availableCashTodayPEN.toFixed(2)}</strong>
+            <strong style={{ color: 'var(--text-main)' }}>S/ {availableCashTodayPEN.toFixed(2)}</strong>
           </div>
           <div>
             <span style={{ color: 'var(--text-muted)' }}>2. Sueldos (+): </span>
-            <strong style={{ color: 'var(--success)' }}>+ S/ {totalMonthlyIncomePEN.toFixed(2)}</strong>
+            <strong style={{ color: '#15803d' }}>+ S/ {totalMonthlyIncomePEN.toFixed(2)}</strong>
           </div>
           <div>
             <span style={{ color: 'var(--text-muted)' }}>3. Gastos Fijos Pendientes (-): </span>
-            <strong style={{ color: '#f59e0b' }}>- S/ {pendingFixedExpensesPEN.toFixed(2)}</strong>
+            <strong style={{ color: '#b45309' }}>- S/ {pendingFixedExpensesPEN.toFixed(2)}</strong>
           </div>
           <div>
             <span style={{ color: 'var(--text-muted)' }}>4. Tarjeta Crédito (-): </span>
-            <strong style={{ color: 'var(--danger)' }}>- S/ {totalCreditCardBillNextMonth.toFixed(2)}</strong>
+            <strong style={{ color: '#be123c' }}>- S/ {totalCreditCardBillNextMonth.toFixed(2)}</strong>
           </div>
         </div>
 
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          TC Ref: <strong>1 USD = S/ {exchangeRate.toFixed(3)}</strong>
+          TC Ref: <strong style={{ color: 'var(--text-main)' }}>1 USD = S/ {exchangeRate.toFixed(3)}</strong>
         </div>
       </div>
 
@@ -473,31 +538,34 @@ export default function LiquidityManager({
               return (
                 <div
                   key={acc.id}
+                  className="card"
                   style={{
-                    background: isOperating ? 'rgba(99, 102, 241, 0.07)' : 'rgba(255, 255, 255, 0.03)',
-                    border: `1px solid ${isOperating ? 'rgba(99, 102, 241, 0.28)' : 'var(--border-color)'}`,
+                    background: '#ffffff',
+                    border: '1px solid var(--border-color)',
                     borderRadius: 'var(--radius-md)',
-                    padding: '1.1rem',
+                    padding: '1.25rem',
+                    boxShadow: 'var(--shadow-sm)',
                     position: 'relative'
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
                     <div>
                       <span style={{
-                        fontSize: '0.68rem',
+                        fontSize: '0.7rem',
                         fontWeight: 700,
-                        padding: '0.15rem 0.45rem',
-                        borderRadius: '4px',
-                        background: isOperating ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
-                        color: '#fff'
+                        padding: '0.2rem 0.5rem',
+                        borderRadius: 'var(--radius-sm)',
+                        background: acc.type === 'tarjeta_credito' ? '#ffe4e6' : (isOperating ? '#e0f2fe' : '#dcfce7'),
+                        color: acc.type === 'tarjeta_credito' ? '#9f1239' : (isOperating ? '#0369a1' : '#15803d'),
+                        border: `1px solid ${acc.type === 'tarjeta_credito' ? '#fecdd3' : (isOperating ? '#bae6fd' : '#bbf7d0')}`
                       }}>
-                        {isOperating ? 'Operativa (Día a día)' : 'Ahorro Reserva'}
+                        {acc.type === 'tarjeta_credito' ? 'Tarjeta de Crédito' : (isOperating ? 'Operativa (Día a día)' : 'Ahorro Reserva')}
                       </span>
-                      <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#fff', marginTop: '0.35rem' }}>
+                      <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)', margin: '0.4rem 0 0.15rem 0' }}>
                         {acc.name}
                       </h4>
                       <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                        {acc.bank} • {isUsd ? '💵 Dólares ($)' : '🇵🇪 Soles (S/)'}
+                        {acc.bank} • {isUsd ? 'Dólares ($)' : 'Soles (S/)'}
                       </span>
                     </div>
 
@@ -523,16 +591,29 @@ export default function LiquidityManager({
 
                   <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <div style={{ fontSize: '1.45rem', fontWeight: 800, color: isOperating ? '#fff' : '#10b981' }}>
+                      <div style={{
+                        fontSize: '1.5rem',
+                        fontWeight: 900,
+                        color: acc.type === 'tarjeta_credito' ? '#be123c' : (isOperating ? 'var(--text-main)' : '#15803d'),
+                        letterSpacing: '-0.5px'
+                      }}>
                         {formatMoney(acc.computedBalance, acc.currency)}
                       </div>
                       {acc.debitedThisMonth > 0 && (
-                        <span style={{ fontSize: '0.72rem', color: '#f59e0b' }}>
+                        <span style={{
+                          fontSize: '0.72rem',
+                          color: '#b45309',
+                          background: '#fffbeb',
+                          padding: '0.15rem 0.45rem',
+                          borderRadius: 'var(--radius-sm)',
+                          border: '1px solid #fde68a',
+                          fontWeight: 700
+                        }}>
                           - S/ {acc.debitedThisMonth.toFixed(2)} gastados
                         </span>
                       )}
                     </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
                       Saldo base inicial: {formatMoney(acc.initial_balance, acc.currency)}
                     </div>
                   </div>
@@ -545,25 +626,29 @@ export default function LiquidityManager({
 
       {/* TAB 2: MIS SUELDOS E INGRESOS */}
       {activeSection === 'ingresos' && (
-        <div className="glass-card animate-fade-in" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+        <div className="card animate-fade-in" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
             <div>
-              <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '0.45rem', margin: 0, fontWeight: 800 }}>
                 <TrendingUp size={18} color="var(--success)" />
                 <span>Mis Sueldos e Ingresos del Mes</span>
               </h3>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                Registra tu sueldo en Soles y cualquier otro sueldo o ingreso en Dólares.
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0.2rem 0 0 0' }}>
+                Configura tu sueldo en planilla, MYPE, honorarios o ingresos extra con cálculo de SUNAT y AFP.
               </p>
             </div>
 
             <button
               onClick={() => setIncomeModal({
                 id: '',
-                title: '',
-                amount: '',
+                title: 'Sueldo Principal',
                 currency: 'PEN',
-                frequency: 'mensual'
+                frequency: 'mensual',
+                regime: 'planilla_general',
+                pension_system_id: 'afp_integra',
+                gross_salary: '3000',
+                has_suspension_4ta: false,
+                amount: '2619.30'
               })}
               className="btn btn-primary"
               style={{ padding: '0.5rem 0.9rem', fontSize: '0.8rem' }}
@@ -573,56 +658,129 @@ export default function LiquidityManager({
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
             {incomes.map(inc => {
               const amt = parseFloat(inc.amount) || 0;
               const inSoles = inc.currency === 'USD' ? amt * exchangeRate : amt;
+              const regime = inc.regime || (inc.currency === 'USD' ? 'neto_directo' : 'planilla_general');
+              
+              let regimeLabel = 'Planilla General (728)';
+              let regimeColor = 'var(--primary)';
+              let regimeBg = 'var(--primary-light)';
+
+              if (regime === 'planilla_mype_pequena') {
+                regimeLabel = 'MYPE Pequeña Empresa';
+                regimeColor = '#7c3aed';
+                regimeBg = 'rgba(124, 58, 237, 0.08)';
+              } else if (regime === 'planilla_mype_micro') {
+                regimeLabel = 'MYPE Microempresa';
+                regimeColor = 'var(--accent-ant)';
+                regimeBg = 'var(--accent-ant-light)';
+              } else if (regime === 'honorarios') {
+                regimeLabel = 'Honorarios (4ta)';
+                regimeColor = 'var(--success)';
+                regimeBg = 'var(--success-light)';
+              } else if (regime === 'neto_directo') {
+                regimeLabel = 'Neto Directo';
+                regimeColor = 'var(--text-muted)';
+                regimeBg = 'var(--bg-card-hover)';
+              }
 
               return (
                 <div key={inc.id} style={{
-                  background: 'rgba(255, 255, 255, 0.03)',
+                  background: 'var(--bg-card)',
                   border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '1.1rem'
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '1.25rem',
+                  boxShadow: 'var(--shadow-sm)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between'
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                      <h4 style={{ fontSize: '0.98rem', fontWeight: 700, color: '#fff' }}>
-                        {inc.title}
-                      </h4>
-                      <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                        {inc.currency === 'USD' ? '💵 Dólares ($)' : '🇵🇪 Soles (S/)'} • Frecuencia: {inc.frequency}
-                      </span>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '0.35rem' }}>
-                      <button
-                        onClick={() => setIncomeModal(inc)}
-                        className="btn btn-secondary"
-                        style={{ padding: '0.3rem 0.5rem' }}
-                      >
-                        <Edit2 size={13} color="var(--primary)" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteIncomeAction(inc.id)}
-                        className="btn btn-danger"
-                        style={{ padding: '0.3rem 0.5rem' }}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--success)' }}>
-                      {formatMoney(amt, inc.currency)}
-                    </div>
-                    {inc.currency === 'USD' && (
-                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
-                        Equivalente: ~S/ {inSoles.toFixed(2)}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.35rem' }}>
+                          <h4 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
+                            {inc.title}
+                          </h4>
+                          <span style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            padding: '0.15rem 0.45rem',
+                            borderRadius: 'var(--radius-sm)',
+                            background: regimeBg,
+                            color: regimeColor
+                          }}>
+                            {regimeLabel}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                          {inc.currency === 'USD' ? '💵 Dólares ($)' : '🇵🇪 Soles (S/)'} • Frecuencia: {inc.frequency}
+                        </span>
                       </div>
-                    )}
+
+                      <div style={{ display: 'flex', gap: '0.35rem' }}>
+                        <button
+                          onClick={() => setIncomeModal({
+                            ...inc,
+                            gross_salary: inc.gross_salary || inc.amount,
+                            regime: inc.regime || (inc.currency === 'USD' ? 'neto_directo' : 'planilla_general'),
+                            pension_system_id: inc.pension_system_id || 'afp_integra',
+                            has_suspension_4ta: Boolean(inc.has_suspension_4ta)
+                          })}
+                          className="btn btn-secondary"
+                          style={{ padding: '0.3rem 0.5rem' }}
+                          title="Editar sueldo / ingreso"
+                        >
+                          <Edit2 size={13} color="var(--primary)" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteIncomeAction(inc.id)}
+                          className="btn btn-danger"
+                          style={{ padding: '0.3rem 0.5rem' }}
+                          title="Eliminar ingreso"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-color)' }}>
+                      <div style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.15rem' }}>
+                        Sueldo Neto Líquido en Cuenta:
+                      </div>
+                      <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--success)', lineHeight: 1.2 }}>
+                        {formatMoney(amt, inc.currency)}
+                      </div>
+                      {inc.currency === 'USD' && (
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                          Equivalente en soles: ~S/ {inSoles.toFixed(2)}
+                        </div>
+                      )}
+                    </div>
                   </div>
+
+                  {inc.gross_salary && inc.gross_salary > amt && (
+                    <div style={{
+                      marginTop: '0.85rem',
+                      padding: '0.55rem 0.75rem',
+                      background: 'var(--bg-card-hover)',
+                      borderRadius: 'var(--radius-md)',
+                      fontSize: '0.72rem',
+                      color: 'var(--text-muted)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.2rem'
+                    }}>
+                      <div>
+                        <strong>Sueldo Bruto:</strong> S/ {parseFloat(inc.gross_salary).toFixed(2)}
+                      </div>
+                      <div style={{ color: 'var(--text-main)', fontWeight: 500 }}>
+                        Deducidos aportes de AFP/ONP y retención de SUNAT.
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -693,8 +851,8 @@ export default function LiquidityManager({
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '0.85rem 1rem',
-                    background: fixed.is_paid ? 'rgba(16, 185, 129, 0.05)' : 'rgba(255, 255, 255, 0.02)',
-                    border: `1px solid ${fixed.is_paid ? 'rgba(16, 185, 129, 0.25)' : 'var(--border-color)'}`,
+                    background: fixed.is_paid ? '#f8fafc' : '#ffffff',
+                    border: `1px solid ${fixed.is_paid ? 'var(--border-color)' : 'var(--border-color)'}`,
                     borderRadius: 'var(--radius-md)',
                     gap: '0.75rem',
                     flexWrap: 'wrap'
@@ -713,25 +871,26 @@ export default function LiquidityManager({
                       }}
                       title={fixed.is_paid ? 'Marcar como pendiente' : 'Marcar como ya pagado este mes'}
                     >
-                      {fixed.is_paid ? <CheckSquare size={22} /> : <Square size={22} />}
+                      {fixed.is_paid ? <CheckSquare size={22} color="#15803d" /> : <Square size={22} />}
                     </button>
                     <div>
                       <h4 style={{
                         fontSize: '0.95rem',
                         fontWeight: 700,
-                        color: fixed.is_paid ? '#a7f3d0' : '#fff',
-                        textDecoration: fixed.is_paid ? 'line-through' : 'none'
+                        color: fixed.is_paid ? 'var(--text-muted)' : 'var(--text-main)',
+                        textDecoration: fixed.is_paid ? 'line-through' : 'none',
+                        margin: 0
                       }}>
                         {fixed.title}
                       </h4>
                       <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                        Vence el día {fixed.due_day} • {fixed.is_paid ? '✅ Ya pagado este mes' : '⏳ Pendiente de pago'}
+                        Vence el día {fixed.due_day} • {fixed.is_paid ? 'Ya pagado este mes' : 'Pendiente de pago'}
                       </span>
                     </div>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ fontSize: '1.15rem', fontWeight: 800, color: fixed.is_paid ? '#6ee7b7' : '#fff' }}>
+                    <div style={{ fontSize: '1.15rem', fontWeight: 800, color: fixed.is_paid ? 'var(--text-muted)' : 'var(--text-main)' }}>
                       {formatMoney(amt, fixed.currency)}
                     </div>
 
@@ -760,7 +919,7 @@ export default function LiquidityManager({
           <div style={{
             marginTop: '1.25rem',
             padding: '1rem',
-            background: 'rgba(255, 255, 255, 0.03)',
+            background: '#ffffff',
             borderRadius: 'var(--radius-md)',
             border: '1px solid var(--border-color)',
             display: 'flex',
@@ -772,30 +931,30 @@ export default function LiquidityManager({
           }}>
             <div>
               <span style={{ color: 'var(--text-muted)' }}>Total compromisos fijos: </span>
-              <strong>S/ {totalFixedExpensesPEN.toFixed(2)}</strong>
+              <strong style={{ color: 'var(--text-main)' }}>S/ {totalFixedExpensesPEN.toFixed(2)}</strong>
             </div>
             <div>
-              <span style={{ color: '#10b981' }}>Ya pagado: </span>
-              <strong>S/ {paidFixedExpensesPEN.toFixed(2)}</strong>
+              <span style={{ color: '#15803d' }}>Ya pagado: </span>
+              <strong style={{ color: '#15803d' }}>S/ {paidFixedExpensesPEN.toFixed(2)}</strong>
             </div>
             <div>
-              <span style={{ color: '#f59e0b' }}>Aún pendiente de pagar: </span>
-              <strong style={{ color: '#fef08a' }}>S/ {pendingFixedExpensesPEN.toFixed(2)}</strong>
+              <span style={{ color: '#b45309' }}>Aún pendiente de pagar: </span>
+              <strong style={{ color: '#b45309' }}>S/ {pendingFixedExpensesPEN.toFixed(2)}</strong>
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB 4: TARJETA DE CRÉDITO & DEUDAS */}
+      {/* TAB 4: TARJETA DE CRÉDITO & DEUDAS (Pastel Coral/Rose) */}
       {activeSection === 'tarjeta' && (
-        <div className="glass-card animate-fade-in" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+        <div className="card animate-fade-in" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
             <div>
-              <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '0.45rem', color: '#fca5a5' }}>
-                <CreditCard size={18} color="var(--danger)" />
+              <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '0.45rem', color: 'var(--text-main)', margin: 0, fontWeight: 800 }}>
+                <CreditCard size={18} color="#dc2626" />
                 <span>Tarjeta de Crédito a Pagar el Próximo Mes</span>
               </h3>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0.2rem 0 0 0' }}>
                 Se calcula automáticamente sumando todos los gastos que registraste con "Tarjeta Crédito" este mes.
               </p>
             </div>
@@ -825,16 +984,16 @@ export default function LiquidityManager({
           </div>
 
           <div style={{
-            background: 'rgba(239, 68, 68, 0.08)',
-            border: '1px solid rgba(239, 68, 68, 0.25)',
+            background: '#fff1f2',
+            border: '1px solid #fecdd3',
             borderRadius: 'var(--radius-md)',
             padding: '1.25rem',
             marginBottom: '1rem'
           }}>
-            <div style={{ fontSize: '0.8rem', color: '#fca5a5', fontWeight: 600 }}>
+            <div style={{ fontSize: '0.8rem', color: '#9f1239', fontWeight: 700 }}>
               Total Deuda Tarjeta de Crédito Próx. Mes:
             </div>
-            <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--danger)', marginTop: '0.25rem' }}>
+            <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#be123c', marginTop: '0.25rem', letterSpacing: '-0.5px' }}>
               {formatMoney(totalCreditCardBillNextMonth, 'PEN')}
             </div>
 
@@ -859,12 +1018,13 @@ export default function LiquidityManager({
           </div>
 
           <div style={{
-            background: 'rgba(255, 255, 255, 0.03)',
+            background: '#f8fafc',
             borderRadius: 'var(--radius-md)',
             padding: '0.85rem 1rem',
             fontSize: '0.8rem',
             color: 'var(--text-muted)',
-            lineHeight: '1.5'
+            lineHeight: '1.5',
+            border: '1px solid var(--border-color)'
           }}>
             💡 <strong>Consejo de Ahorro:</strong> Cada vez que registras un gasto eligiendo "Tarjeta Crédito", se acumula automáticamente en esta cuenta para que nunca te sorprenda el recibo del banco ni pagues intereses.
           </div>
@@ -1041,7 +1201,7 @@ export default function LiquidityManager({
         </div>
       )}
 
-      {/* MODAL PARA AGREGAR O EDITAR SUELDO / INGRESO */}
+      {/* MODAL PARA AGREGAR O EDITAR SUELDO / INGRESO CON MOTOR PERUANO */}
       {incomeModal && (
         <div style={{
           position: 'fixed',
@@ -1049,19 +1209,23 @@ export default function LiquidityManager({
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(5, 8, 15, 0.85)',
-          backdropFilter: 'blur(8px)',
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(6px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 1200,
-          padding: '1rem'
+          padding: '1rem',
+          overflowY: 'auto'
         }}>
-          <div className="glass-card animate-fade-in" style={{
+          <div className="card animate-fade-in" style={{
             width: '100%',
-            maxWidth: '420px',
+            maxWidth: '540px',
             padding: '1.5rem',
-            position: 'relative'
+            position: 'relative',
+            maxHeight: '92vh',
+            overflowY: 'auto',
+            boxShadow: 'var(--shadow-xl)'
           }}>
             <button
               onClick={() => setIncomeModal(null)}
@@ -1069,42 +1233,260 @@ export default function LiquidityManager({
                 position: 'absolute',
                 top: '1rem',
                 right: '1rem',
-                background: 'rgba(255,255,255,0.06)',
+                background: 'var(--bg-card-hover)',
                 border: '1px solid var(--border-color)',
                 color: 'var(--text-muted)',
                 borderRadius: '50%',
-                width: '30px',
-                height: '30px',
+                width: '32px',
+                height: '32px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer'
               }}
             >
-              <X size={15} />
+              <X size={16} />
             </button>
 
-            <h3 style={{ fontSize: '1.2rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-              <TrendingUp size={18} color="var(--success)" />
-              <span>{incomeModal.id ? 'Editar Ingreso' : 'Añadir Sueldo / Ingreso'}</span>
-            </h3>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <h3 style={{ fontSize: '1.2rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.45rem', fontWeight: 800 }}>
+                <Briefcase size={20} color="var(--primary)" />
+                <span>{incomeModal.id ? 'Editar Sueldo / Ingreso' : 'Configurar Sueldo o Ingreso'}</span>
+              </h3>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0.25rem 0 0 0' }}>
+                Cálculo automático y transparente de AFP/ONP y retención de SUNAT en Perú
+              </p>
+            </div>
 
             <form onSubmit={handleSaveIncomeModal}>
-              <div style={{ marginBottom: '1rem' }}>
-                <label className="form-label" style={{ fontSize: '0.8rem' }}>Concepto</label>
-                <input
-                  type="text"
-                  value={incomeModal.title}
-                  onChange={(e) => setIncomeModal({ ...incomeModal, title: e.target.value })}
-                  className="form-input"
-                  placeholder="Ej: Sueldo Empresa, Trabajo Remoto USD, Freelance..."
-                  required
-                />
+              
+              {/* Concepto y Moneda */}
+              <div className="grid-2" style={{ marginBottom: '1rem', gap: '0.75rem' }}>
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '0.3rem' }}>
+                    Concepto o Nombre
+                  </label>
+                  <input
+                    type="text"
+                    value={incomeModal.title}
+                    onChange={(e) => setIncomeModal({ ...incomeModal, title: e.target.value })}
+                    className="form-input"
+                    placeholder="Ej: Sueldo Principal BCP, Freelance..."
+                    required
+                    style={{ fontSize: '0.85rem' }}
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '0.3rem' }}>
+                    Moneda
+                  </label>
+                  <select
+                    value={incomeModal.currency || 'PEN'}
+                    onChange={(e) => setIncomeModal({ ...incomeModal, currency: e.target.value })}
+                    className="form-select"
+                    style={{ fontSize: '0.85rem' }}
+                  >
+                    <option value="PEN">🇵🇪 Soles (S/)</option>
+                    <option value="USD">💵 Dólares ($)</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="grid-2" style={{ marginBottom: '1.25rem' }}>
-                <div>
-                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Monto</label>
+              {/* Modalidad Laboral / Régimen */}
+              <div style={{ marginBottom: '1rem' }}>
+                <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <Receipt size={13} color="var(--primary)" />
+                  <span>Modalidad Laboral / Régimen</span>
+                </label>
+                <select
+                  value={incomeModal.regime || (incomeModal.currency === 'USD' ? 'neto_directo' : 'planilla_general')}
+                  onChange={(e) => setIncomeModal({ ...incomeModal, regime: e.target.value })}
+                  className="form-select"
+                  style={{ fontSize: '0.85rem' }}
+                >
+                  <option value="planilla_general">🏢 Planilla Régimen General (728) — Grati completa + CTS + AFP/ONP</option>
+                  <option value="planilla_mype_pequena">🏬 Planilla Régimen MYPE (Pequeña Empresa) — Media Grati + Media CTS</option>
+                  <option value="planilla_mype_micro">🏪 Planilla Régimen MYPE (Microempresa) — Solo AFP/ONP (Sin Grati/CTS)</option>
+                  <option value="honorarios">📄 Recibos por Honorarios (4ta Categoría) — Retención 8% SUNAT</option>
+                  <option value="neto_directo">💵 Monto Neto Directo — Sin retenciones calculadas (Remoto/Informal)</option>
+                </select>
+              </div>
+
+              {/* Sueldo Bruto y Sistema de Pensión según régimen */}
+              {incomeModal.regime !== 'neto_directo' && incomeModal.currency === 'PEN' ? (
+                <>
+                  <div className="grid-2" style={{ marginBottom: '1rem', gap: '0.75rem' }}>
+                    <div>
+                      <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '0.3rem' }}>
+                        {incomeModal.regime === 'honorarios' ? 'Monto Bruto del Recibo' : 'Sueldo Bruto Contratado'}
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 700, color: 'var(--text-muted)' }}>
+                          S/
+                        </span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={incomeModal.gross_salary ?? incomeModal.amount ?? ''}
+                          onChange={(e) => setIncomeModal({ ...incomeModal, gross_salary: e.target.value, amount: e.target.value })}
+                          className="form-input"
+                          placeholder="3000.00"
+                          required
+                          style={{ paddingLeft: '2.2rem', fontSize: '0.95rem', fontWeight: 700 }}
+                        />
+                      </div>
+                    </div>
+
+                    {incomeModal.regime !== 'honorarios' && (
+                      <div>
+                        <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '0.3rem' }}>
+                          Fondo de Pensión (AFP / ONP)
+                        </label>
+                        <select
+                          value={incomeModal.pension_system_id || 'afp_integra'}
+                          onChange={(e) => setIncomeModal({ ...incomeModal, pension_system_id: e.target.value })}
+                          className="form-select"
+                          style={{ fontSize: '0.85rem' }}
+                        >
+                          <option value="afp_integra">AFP Integra (~12.7%)</option>
+                          <option value="afp_prima">AFP Prima (~12.8%)</option>
+                          <option value="afp_profuturo">AFP Profuturo (~13.0%)</option>
+                          <option value="afp_habitat">AFP Habitat (~12.8%)</option>
+                          <option value="onp">ONP - Sistema Nacional (13.0%)</option>
+                          <option value="none">Sin Fondo de Pensión (0%)</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Si es honorarios: Checkbox de Suspensión de 4ta */}
+                  {incomeModal.regime === 'honorarios' && (
+                    <div
+                      onClick={() => setIncomeModal({ ...incomeModal, has_suspension_4ta: !incomeModal.has_suspension_4ta })}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.6rem',
+                        padding: '0.65rem 0.85rem',
+                        background: 'var(--bg-card-hover)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-md)',
+                        marginBottom: '1rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={Boolean(incomeModal.has_suspension_4ta)}
+                        onChange={(e) => setIncomeModal({ ...incomeModal, has_suspension_4ta: e.target.checked })}
+                        style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                        Cuento con Suspensión de 4ta Categoría de SUNAT (Form. 1609 - retención 0%)
+                      </span>
+                    </div>
+                  )}
+
+                  {/* DESGLOSE EN VIVO (Cálculo Perú) */}
+                  {payrollPreview && (
+                    <div style={{
+                      background: 'var(--bg-card-hover)',
+                      border: '1.5px solid var(--border-color)',
+                      borderRadius: 'var(--radius-lg)',
+                      padding: '1rem',
+                      marginBottom: '1.25rem'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <span>🇵🇪 Desglose de tu Sueldo en Mano</span>
+                        </span>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                          UIT S/ {PERU_UIT.toLocaleString()}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', fontSize: '0.8rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Sueldo Bruto:</span>
+                          <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+                            S/ {payrollPreview.grossSalary.toFixed(2)}
+                          </span>
+                        </div>
+
+                        {payrollPreview.pensionDeduction > 0 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>
+                              (-) Descuento Pensión ({payrollPreview.pensionName}):
+                            </span>
+                            <span style={{ fontWeight: 700, color: 'var(--danger)' }}>
+                              - S/ {payrollPreview.pensionDeduction.toFixed(2)}
+                            </span>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>
+                            (-) {payrollPreview.taxName}:
+                          </span>
+                          <span style={{ fontWeight: 700, color: payrollPreview.taxDeduction > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                            {payrollPreview.taxDeduction > 0 ? `- S/ ${payrollPreview.taxDeduction.toFixed(2)}` : 'S/ 0.00'}
+                          </span>
+                        </div>
+
+                        <div style={{
+                          marginTop: '0.5rem',
+                          paddingTop: '0.5rem',
+                          borderTop: '1px solid var(--border-color)',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'baseline'
+                        }}>
+                          <span style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '0.85rem' }}>
+                            (=) Tu Sueldo Neto en Cuenta:
+                          </span>
+                          <span style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--success)' }}>
+                            S/ {payrollPreview.netSalary.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Beneficios adicionales si aplican */}
+                      {payrollPreview.gratiEstimatedMonthly > 0 && (
+                        <div style={{
+                          marginTop: '0.65rem',
+                          padding: '0.5rem 0.65rem',
+                          background: 'var(--bg-card)',
+                          borderRadius: 'var(--radius-sm)',
+                          fontSize: '0.72rem',
+                          color: 'var(--text-muted)',
+                          lineHeight: '1.4'
+                        }}>
+                          <div style={{ fontWeight: 700, color: 'var(--text-main)', marginBottom: '0.15rem' }}>
+                            🎁 Beneficios anuales por ley proyectados:
+                          </div>
+                          <div>
+                            • Gratificaciones (Julio y Diciembre): ~S/ {((payrollPreview.grossSalary * (incomeModal.regime === 'planilla_general' ? 1.09 : 0.545))).toFixed(2)} cada una
+                          </div>
+                          <div>
+                            • CTS (Mayo y Noviembre): ~S/ {(payrollPreview.ctsEstimatedMonthly * 12).toFixed(2)} al año
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.45rem', fontStyle: 'italic' }}>
+                        💡 {payrollPreview.summaryText}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* Monto directo cuando es neto o dólares */
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '0.3rem' }}>
+                    Monto Neto Mensual
+                  </label>
                   <input
                     type="number"
                     step="0.01"
@@ -1114,23 +1496,15 @@ export default function LiquidityManager({
                     className="form-input"
                     placeholder="0.00"
                     required
+                    style={{ fontSize: '1.1rem', fontWeight: 700 }}
                   />
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.25rem' }}>
+                    Ingreso neto sin deducciones previsionales o tributarias de planilla peruana.
+                  </span>
                 </div>
+              )}
 
-                <div>
-                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Moneda</label>
-                  <select
-                    value={incomeModal.currency || 'PEN'}
-                    onChange={(e) => setIncomeModal({ ...incomeModal, currency: e.target.value })}
-                    className="form-select"
-                  >
-                    <option value="PEN">🇵🇪 Soles (S/)</option>
-                    <option value="USD">💵 Dólares ($)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
                 <button
                   type="button"
                   onClick={() => setIncomeModal(null)}
@@ -1145,7 +1519,7 @@ export default function LiquidityManager({
                   style={{ padding: '0.6rem 1.25rem', fontSize: '0.85rem', fontWeight: 700 }}
                 >
                   <Check size={16} />
-                  <span>Guardar Ingreso</span>
+                  <span>Guardar Sueldo</span>
                 </button>
               </div>
             </form>

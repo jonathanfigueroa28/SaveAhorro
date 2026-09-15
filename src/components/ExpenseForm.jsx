@@ -3,25 +3,21 @@ import {
   DEFAULT_CATEGORIES,
   getLimaNowIso,
   ANT_PRESETS_BY_CURRENCY,
-  CURRENCIES,
   PAYMENT_METHODS,
   PERU_BANKS
 } from '../lib/supabaseClient';
 import {
   Bug,
-  DollarSign,
   Calendar,
-  FileText,
   CheckCircle2,
-  Sparkles,
   AlertTriangle,
-  Cloud,
-  Clock,
   ChevronDown,
   ChevronUp,
   CreditCard,
   Building,
-  MapPin
+  MapPin,
+  Sparkles,
+  ArrowRight
 } from 'lucide-react';
 
 export default function ExpenseForm({
@@ -37,18 +33,24 @@ export default function ExpenseForm({
   const [description, setDescription] = useState('');
   const [isAntExpense, setIsAntExpense] = useState(true);
   const [date, setDate] = useState(getLimaNowIso());
-  const [paymentMethod, setPaymentMethod] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('yape');
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [bank, setBank] = useState('');
   const [place, setPlace] = useState('');
-  const [showMoreDetails, setShowMoreDetails] = useState(false);
-  const [showQuickPresets, setShowQuickPresets] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
 
   // Sync if parent currency changes
   useEffect(() => {
     setFormCurrency(currentCurrency);
   }, [currentCurrency]);
+
+  // Auto-vincular cuenta según método por defecto
+  useEffect(() => {
+    if (paymentMethod) {
+      bindAccountByMethod(paymentMethod);
+    }
+  }, [accounts]);
 
   const handleCurrencySelect = (cur) => {
     setFormCurrency(cur);
@@ -66,13 +68,50 @@ export default function ExpenseForm({
     }
   };
 
-  const handleToggleAntExpense = (newChecked) => {
-    setIsAntExpense(newChecked);
-    if (newChecked) {
+  const handleToggleAnt = () => {
+    const next = !isAntExpense;
+    setIsAntExpense(next);
+    if (next) {
       setCategory('gastos-hormiga');
-    } else {
-      if (category === 'gastos-hormiga') {
-        setCategory('otros');
+    } else if (category === 'gastos-hormiga') {
+      setCategory('otros');
+    }
+  };
+
+  const bindAccountByMethod = (pmId) => {
+    if (!pmId) {
+      setSelectedAccountId('');
+      return;
+    }
+    if (pmId === 'yape') {
+      const acc = accounts.find(a => a.type === 'billetera_digital' && (a.name.toLowerCase().includes('yape') || a.id.includes('yape')));
+      if (acc) {
+        setSelectedAccountId(acc.id);
+        setBank(acc.bank || 'BCP');
+      }
+    } else if (pmId === 'plin') {
+      const acc = accounts.find(a => a.name.toLowerCase().includes('plin') || a.id.includes('plin'));
+      if (acc) {
+        setSelectedAccountId(acc.id);
+        setBank(acc.bank || 'Interbank');
+      }
+    } else if (pmId === 'efectivo') {
+      const acc = accounts.find(a => a.type === 'efectivo' || a.id.includes('efectivo'));
+      if (acc) {
+        setSelectedAccountId(acc.id);
+        setBank('Efectivo');
+      }
+    } else if (pmId === 'credito') {
+      const acc = accounts.find(a => a.type === 'tarjeta_credito' || a.id.includes('tc'));
+      if (acc) {
+        setSelectedAccountId(acc.id);
+        setBank(acc.bank || 'BCP');
+      }
+    } else if (pmId === 'debito') {
+      const acc = accounts.find(a => a.type === 'banco' || a.id.includes('debito'));
+      if (acc) {
+        setSelectedAccountId(acc.id);
+        setBank(acc.bank || 'BCP');
       }
     }
   };
@@ -80,47 +119,17 @@ export default function ExpenseForm({
   const handlePaymentMethodSelect = (pmId) => {
     const nextPm = paymentMethod === pmId ? '' : pmId;
     setPaymentMethod(nextPm);
-
-    if (!nextPm) {
-      setSelectedAccountId('');
-      return;
-    }
-
-    // Auto-vincular cuenta según método
-    if (nextPm === 'yape') {
-      const yapeAcc = accounts.find(a => a.type === 'billetera_digital' && (a.name.toLowerCase().includes('yape') || a.id.includes('yape')));
-      if (yapeAcc) {
-        setSelectedAccountId(yapeAcc.id);
-        setBank(yapeAcc.bank || 'BCP');
-      }
-    } else if (nextPm === 'plin') {
-      const plinAcc = accounts.find(a => a.name.toLowerCase().includes('plin') || a.id.includes('plin'));
-      if (plinAcc) {
-        setSelectedAccountId(plinAcc.id);
-        setBank(plinAcc.bank || 'Interbank');
-      }
-    } else if (nextPm === 'efectivo') {
-      const cashAcc = accounts.find(a => a.type === 'efectivo' || a.id.includes('efectivo'));
-      if (cashAcc) {
-        setSelectedAccountId(cashAcc.id);
-        setBank('Efectivo');
-      }
-    } else if (nextPm === 'credito') {
-      const tcAcc = accounts.find(a => a.type === 'tarjeta_credito' || a.id.includes('tc'));
-      if (tcAcc) {
-        setSelectedAccountId(tcAcc.id);
-        setBank(tcAcc.bank || 'BCP');
-      }
-    } else if (nextPm === 'debito') {
-      const debAcc = accounts.find(a => a.type === 'banco' || a.id.includes('debito'));
-      if (debAcc) {
-        setSelectedAccountId(debAcc.id);
-        setBank(debAcc.bank || 'BCP');
-      }
-    }
+    bindAccountByMethod(nextPm);
   };
 
   const currentPresets = ANT_PRESETS_BY_CURRENCY[formCurrency] || ANT_PRESETS_BY_CURRENCY.PEN;
+
+  const handleApplyPreset = (preset) => {
+    setAmount(preset.amount.toString());
+    setDescription(preset.desc || preset.label);
+    setCategory('gastos-hormiga');
+    setIsAntExpense(true);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -130,193 +139,111 @@ export default function ExpenseForm({
       amount: parseFloat(amount),
       currency: formCurrency,
       category,
-      description,
+      description: description.trim(),
       is_ant_expense: isAntExpense,
       payment_method: paymentMethod || null,
       account_id: selectedAccountId || null,
       bank: bank || null,
-      place: place || null,
+      place: place.trim() || null,
       date: new Date(date).toISOString()
     });
 
-    // Reset form fields
+    // Reset fields
     setAmount('');
     setDescription('');
-    setPaymentMethod('');
-    setSelectedAccountId('');
-    setBank('');
     setPlace('');
-    setShowMoreDetails(false);
+    setShowAdvanced(false);
 
     if (res?.cloudError) {
       setSubmitStatus({
         type: 'warning',
-        message: `Guardado en tu navegador, pero Supabase reportó: "${res.cloudError}". Recuerda ejecutar el script de permisos en Supabase SQL Editor.`
-      });
-    } else if (res?.isCloudEnabled) {
-      setSubmitStatus({
-        type: 'success',
-        message: '¡Gasto guardado en tu base de datos de Supabase en la nube con éxito! ☁️✅'
+        message: `Guardado localmente. Supabase avisó: ${res.cloudError}`
       });
     } else {
       setSubmitStatus({
         type: 'success',
-        message: '¡Gasto registrado localmente con éxito!'
+        message: 'Gasto registrado correctamente'
       });
     }
 
-    setTimeout(() => setSubmitStatus(null), 5000);
+    setTimeout(() => setSubmitStatus(null), 4000);
   };
 
-  const handleApplyPreset = (preset) => {
-    setAmount(preset.amount);
-    setDescription(preset.desc);
-    setCategory('gastos-hormiga');
-    setIsAntExpense(true);
-  };
+  const currencySymbol = formCurrency === 'USD' ? '$' : 'S/';
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: '680px', margin: '0 auto' }}>
-      <div className="glass-card" style={{ padding: '1.25rem 1.5rem' }}>
+    <div className="animate-fade-in" style={{ maxWidth: '580px', margin: '0 auto' }}>
+      <div className="card" style={{ padding: '1.5rem', boxShadow: 'var(--shadow-md)' }}>
         
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+        {/* Top Header: Title + Minimalist Currency Segmented Toggle */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '1.25rem'
+        }}>
           <div>
-            <h2 style={{ fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span>Registro Rápido</span>
-              {isAntExpense && (
-                <span className="badge badge-ant">
-                  <Bug size={14} /> Gasto Hormiga
-                </span>
-              )}
+            <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
+              Nuevo Gasto
             </h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.2rem' }}>
-              <Clock size={13} color="var(--primary)" />
-              <span>Hora de Lima, Perú (UTC-5)</span>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0.15rem 0 0 0' }}>
+              Registra en segundos y controla a dónde va tu dinero
             </p>
           </div>
 
-          {/* Currency Switcher in Form */}
-          <div style={{
-            display: 'inline-flex',
-            background: 'rgba(255, 255, 255, 0.05)',
-            borderRadius: 'var(--radius-md)',
-            padding: '3px',
-            border: '1px solid var(--border-color)'
-          }}>
+          {/* Segmented Control */}
+          <div className="currency-toggle-group">
             <button
               type="button"
               onClick={() => handleCurrencySelect('PEN')}
-              style={{
-                padding: '0.4rem 0.8rem',
-                fontSize: '0.8rem',
-                fontWeight: '700',
-                borderRadius: 'var(--radius-sm)',
-                border: 'none',
-                cursor: 'pointer',
-                background: formCurrency === 'PEN' ? 'var(--primary)' : 'transparent',
-                color: formCurrency === 'PEN' ? '#fff' : 'var(--text-muted)'
-              }}
+              className={`currency-btn ${formCurrency === 'PEN' ? 'soles-active' : 'inactive'}`}
+              style={{ padding: '0.32rem 0.75rem', fontSize: '0.78rem' }}
             >
-              🇵🇪 Soles (S/)
+              <span>🇵🇪</span>
+              <span>S/ Soles</span>
             </button>
             <button
               type="button"
               onClick={() => handleCurrencySelect('USD')}
-              style={{
-                padding: '0.4rem 0.8rem',
-                fontSize: '0.8rem',
-                fontWeight: '700',
-                borderRadius: 'var(--radius-sm)',
-                border: 'none',
-                cursor: 'pointer',
-                background: formCurrency === 'USD' ? 'var(--primary)' : 'transparent',
-                color: formCurrency === 'USD' ? '#fff' : 'var(--text-muted)'
-              }}
+              className={`currency-btn ${formCurrency === 'USD' ? 'usd-active' : 'inactive'}`}
+              style={{ padding: '0.32rem 0.75rem', fontSize: '0.78rem' }}
             >
-              💵 Dólares ($)
+              <span>💵</span>
+              <span>$ Dólares</span>
             </button>
           </div>
         </div>
 
-        {/* Quick Presets for "Gastos Hormiga" (Desplegable / Colapsable) */}
-        <div id="tour-quick-presets" style={{
-          marginBottom: '1rem',
-          background: 'rgba(245, 158, 11, 0.04)',
-          borderRadius: 'var(--radius-md)',
-          border: '1px solid rgba(245, 158, 11, 0.18)',
-          overflow: 'hidden'
-        }}>
-          <button
-            type="button"
-            onClick={() => setShowQuickPresets(!showQuickPresets)}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '0.65rem 0.85rem',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#fef08a',
-              fontFamily: 'inherit'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', fontWeight: 600 }}>
-              <Sparkles size={14} color="#f59e0b" />
-              <span>Atajos Rápidos de Gastos Hormiga 🐜</span>
-              <span style={{ fontSize: '0.72rem', color: 'rgba(254, 240, 138, 0.7)' }}>({currentPresets.length} opciones)</span>
-            </div>
-            {showQuickPresets ? <ChevronUp size={16} color="#f59e0b" /> : <ChevronDown size={16} color="#f59e0b" />}
-          </button>
-
-          {showQuickPresets && (
-            <div className="animate-fade-in" style={{ padding: '0.4rem 0.85rem 0.85rem 0.85rem', borderTop: '1px solid rgba(245, 158, 11, 0.1)' }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                {currentPresets.map((preset, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className="chip chip-ant"
-                    onClick={() => {
-                      handleApplyPreset(preset);
-                      setShowQuickPresets(false);
-                    }}
-                    style={{ fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.35rem 0.65rem' }}
-                  >
-                    <span>{preset.label}</span>
-                    <span style={{ fontWeight: '700', color: '#fef08a' }}>
-                      ({formCurrency === 'USD' ? '$' : 'S/'} {preset.amount})
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
         <form onSubmit={handleSubmit}>
-          {/* Amount Field (Highlighted) */}
-          <div id="tour-amount-section" className="form-group" style={{ marginBottom: '1rem' }}>
-            <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-              <span>Monto ({formCurrency === 'USD' ? '$ USD' : 'S/ PEN'})</span>
-              <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
-                Moneda: {formCurrency === 'USD' ? 'USD ($)' : 'PEN (S/)'}
+          
+          {/* Hero Amount Field */}
+          <div id="tour-amount-section" style={{
+            background: 'linear-gradient(180deg, #ffffff 0%, var(--bg-card-hover) 100%)',
+            border: '2px solid var(--border-color)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '1.1rem 1.25rem',
+            marginBottom: '1rem',
+            transition: 'border-color 0.2s ease',
+            position: 'relative'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Monto a registrar
               </span>
-            </label>
-            <div style={{ position: 'relative' }}>
-              <div style={{
-                position: 'absolute',
-                left: '1rem',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: formCurrency === 'USD' ? '#10b981' : 'var(--primary)',
-                fontWeight: '800',
-                fontSize: '1.25rem'
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary)' }}>
+                {formCurrency === 'USD' ? 'Dólares Americanos' : 'Soles Peruanos'}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{
+                fontSize: '1.75rem',
+                fontWeight: 800,
+                color: formCurrency === 'USD' ? 'var(--success)' : 'var(--primary)',
+                lineHeight: 1
               }}>
-                {formCurrency === 'USD' ? '$' : 'S/'}
-              </div>
+                {currencySymbol}
+              </span>
               <input
                 type="number"
                 step="0.01"
@@ -324,29 +251,90 @@ export default function ExpenseForm({
                 placeholder="0.00"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="form-input"
-                style={{
-                  paddingLeft: formCurrency === 'USD' ? '2.5rem' : '3.2rem',
-                  fontSize: '1.6rem',
-                  fontWeight: '700',
-                  color: '#fff',
-                  letterSpacing: '0.5px'
-                }}
-                required
                 autoFocus
+                required
+                style={{
+                  width: '100%',
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  fontSize: '2rem',
+                  fontWeight: 800,
+                  color: 'var(--text-main)',
+                  fontFamily: 'inherit',
+                  letterSpacing: '-0.5px'
+                }}
               />
             </div>
           </div>
 
-          {/* Description & Category in 1 row for ultra-fast entry */}
+          {/* Quick Presets: Sleek Horizontal Scrollable Pills */}
+          <div id="tour-quick-presets" style={{ marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.45rem' }}>
+              <Sparkles size={13} color="var(--accent-ant)" />
+              <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+                Atajos frecuentes de 1 toque:
+              </span>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              gap: '0.4rem',
+              overflowX: 'auto',
+              paddingBottom: '0.35rem',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none'
+            }}>
+              {currentPresets.map((preset, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleApplyPreset(preset)}
+                  style={{
+                    flexShrink: 0,
+                    padding: '0.38rem 0.65rem',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-full)',
+                    fontSize: '0.76rem',
+                    fontWeight: 600,
+                    color: 'var(--text-main)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    transition: 'all 0.15s ease',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--primary)';
+                    e.currentTarget.style.background = 'var(--bg-card-hover)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--border-color)';
+                    e.currentTarget.style.background = 'var(--bg-card)';
+                  }}
+                >
+                  <span>{preset.label}</span>
+                  <span style={{ fontWeight: 800, color: 'var(--primary)' }}>
+                    {currencySymbol}{preset.amount}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Category & Description In 2 Columns */}
           <div className="grid-2" style={{ marginBottom: '1rem', gap: '0.75rem' }}>
             <div>
-              <label className="form-label" style={{ fontSize: '0.82rem' }}>Categoría</label>
+              <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '0.35rem' }}>
+                Categoría
+              </label>
               <select
                 value={category}
                 onChange={(e) => handleCategoryChange(e.target.value)}
                 className="form-select"
-                style={{ padding: '0.75rem 0.9rem' }}
+                style={{ padding: '0.65rem 0.8rem', fontSize: '0.85rem' }}
               >
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.id}>
@@ -357,192 +345,195 @@ export default function ExpenseForm({
             </div>
 
             <div>
-              <label className="form-label" style={{ fontSize: '0.82rem' }}>Detalle / Nota rápida</label>
+              <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '0.35rem' }}>
+                Detalle o Nota
+              </label>
               <input
                 type="text"
-                placeholder="Ej: Emoliente con pan..."
+                placeholder="Ej. Almuerzo menú, café..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 className="form-input"
-                style={{ padding: '0.75rem 0.9rem' }}
+                style={{ padding: '0.65rem 0.8rem', fontSize: '0.85rem' }}
               />
             </div>
           </div>
 
-          {/* Gasto Hormiga Switch */}
-          <div style={{
-            background: isAntExpense ? 'var(--accent-ant-light)' : 'rgba(255,255,255,0.03)',
-            border: `1px solid ${isAntExpense ? 'rgba(245, 158, 11, 0.4)' : 'var(--border-color)'}`,
-            borderRadius: 'var(--radius-md)',
-            padding: '0.65rem 0.9rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '1rem',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease'
-          }} onClick={() => handleToggleAntExpense(!isAntExpense)}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          {/* Payment Method Direct Pills */}
+          <div id="tour-payment-methods" style={{ marginBottom: '1rem' }}>
+            <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <CreditCard size={13} color="var(--primary)" />
+              <span>¿Cómo lo pagaste?</span>
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.45rem' }}>
+              {[
+                { id: 'yape', label: 'Yape / Plin', icon: '🟣' },
+                { id: 'efectivo', label: 'Efectivo', icon: '💵' },
+                { id: 'debito', label: 'Débito', icon: '💳' },
+                { id: 'credito', label: 'Crédito', icon: '💳' }
+              ].map(pm => {
+                const isSelected = paymentMethod === pm.id;
+                return (
+                  <button
+                    key={pm.id}
+                    type="button"
+                    onClick={() => handlePaymentMethodSelect(pm.id)}
+                    style={{
+                      padding: '0.6rem 0.4rem',
+                      borderRadius: 'var(--radius-md)',
+                      border: `1.5px solid ${isSelected ? 'var(--primary)' : 'var(--border-color)'}`,
+                      background: isSelected ? 'var(--primary-light)' : 'var(--bg-card)',
+                      color: isSelected ? 'var(--primary)' : 'var(--text-main)',
+                      fontWeight: isSelected ? 700 : 500,
+                      fontSize: '0.78rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '0.2rem',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <span style={{ fontSize: '0.95rem' }}>{pm.icon}</span>
+                    <span>{pm.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Compact Inline Switch: Gasto Hormiga */}
+          <div
+            onClick={handleToggleAnt}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.65rem 0.85rem',
+              borderRadius: 'var(--radius-md)',
+              background: isAntExpense ? 'var(--accent-ant-light)' : 'var(--bg-card-hover)',
+              border: `1px solid ${isAntExpense ? 'var(--accent-ant)' : 'var(--border-color)'}`,
+              marginBottom: '1rem',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <div style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                background: isAntExpense ? '#f59e0b' : 'rgba(255,255,255,0.1)',
+                width: '24px',
+                height: '24px',
+                borderRadius: '6px',
+                background: isAntExpense ? 'var(--accent-ant)' : 'var(--border-color)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#fff'
+                color: '#ffffff'
               }}>
-                <Bug size={18} />
+                <Bug size={14} />
               </div>
               <div>
-                <strong style={{ fontSize: '0.85rem', color: isAntExpense ? '#fef08a' : 'var(--text-main)' }}>
-                  ¿Es un Gasto Hormiga? 🐜
-                </strong>
-                <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                  Micro-gastos diarios (café, pasajes, golosinas, propinas)
-                </p>
+                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                  Gasto hormiga
+                </span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>
+                  Micro-compra del día que resta sin darte cuenta
+                </span>
               </div>
             </div>
             <input
               type="checkbox"
               checked={isAntExpense}
-              onChange={(e) => handleToggleAntExpense(e.target.checked)}
-              style={{ width: '18px', height: '18px', accentColor: '#f59e0b', cursor: 'pointer' }}
+              onChange={handleToggleAnt}
+              style={{ width: '16px', height: '16px', accentColor: 'var(--accent-ant)', cursor: 'pointer' }}
             />
           </div>
 
-          {/* Collapsible Button: "Más detalles (Opcional)" */}
-          <div id="tour-payment-methods" style={{ marginBottom: '1.25rem' }}>
+          {/* Collapsible: Opciones Adicionales (Cuenta, Establecimiento, Fecha) */}
+          <div style={{ marginBottom: '1.25rem' }}>
             <button
               type="button"
-              onClick={() => setShowMoreDetails(!showMoreDetails)}
+              onClick={() => setShowAdvanced(!showAdvanced)}
               style={{
                 width: '100%',
-                background: showMoreDetails ? 'rgba(99, 102, 241, 0.12)' : 'rgba(255, 255, 255, 0.04)',
-                border: '1px dashed var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                padding: '0.65rem 1rem',
-                color: showMoreDetails ? 'var(--primary)' : 'var(--text-muted)',
-                fontSize: '0.85rem',
+                background: 'transparent',
+                border: 'none',
+                padding: '0.35rem 0',
+                fontSize: '0.78rem',
                 fontWeight: 600,
+                color: 'var(--text-muted)',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
-                transition: 'all 0.2s ease'
+                justifyContent: 'center',
+                gap: '0.35rem'
               }}
             >
-              <span>{showMoreDetails ? '➖ Ocultar detalles adicionales' : '➕ Añadir más detalles opcionales (Método de pago, banco, lugar)'}</span>
-              {showMoreDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              <span>{showAdvanced ? 'Ocultar opciones adicionales' : '+ Más opciones (Cuenta, lugar, fecha)'}</span>
+              {showAdvanced ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
 
-            {/* Collapsible Details Content */}
-            {showMoreDetails && (
+            {showAdvanced && (
               <div className="animate-fade-in" style={{
-                marginTop: '0.75rem',
-                padding: '1rem',
-                background: 'rgba(255, 255, 255, 0.02)',
+                marginTop: '0.65rem',
+                padding: '0.85rem',
+                background: 'var(--bg-card-hover)',
                 borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--border-color)'
+                border: '1px solid var(--border-color)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem'
               }}>
-                {/* Método de Pago */}
-                <div style={{ marginBottom: '1rem' }}>
-                  <label className="form-label" style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <CreditCard size={14} color="var(--primary)" />
-                    <span>Método de Pago (Auto-selecciona tu cuenta)</span>
-                  </label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.35rem' }}>
-                    {PAYMENT_METHODS.map(pm => (
-                      <button
-                        key={pm.id}
-                        type="button"
-                        onClick={() => handlePaymentMethodSelect(pm.id)}
-                        className={`chip ${paymentMethod === pm.id ? 'active' : ''}`}
-                        style={{ fontSize: '0.8rem', padding: '0.35rem 0.65rem' }}
-                      >
-                        {pm.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Cuenta o Fondo a debitar */}
                 {accounts.length > 0 && (
-                  <div style={{ marginBottom: '1rem' }}>
-                    <label className="form-label" style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                      <Building size={14} color="var(--primary)" />
-                      <span>Cuenta / Fondo a Debitar</span>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <Building size={12} color="var(--primary)" />
+                      <span>Cuenta a debitar</span>
                     </label>
                     <select
                       value={selectedAccountId}
                       onChange={(e) => setSelectedAccountId(e.target.value)}
                       className="form-select"
-                      style={{ fontSize: '0.85rem', padding: '0.65rem' }}
+                      style={{ fontSize: '0.8rem', padding: '0.5rem 0.65rem' }}
                     >
-                      <option value="">Seleccionar cuenta asociada (Opcional)</option>
+                      <option value="">Selección automática según método</option>
                       {accounts.map(acc => (
                         <option key={acc.id} value={acc.id}>
                           {acc.name} ({acc.bank}) — {acc.currency === 'USD' ? '$' : 'S/'} {parseFloat(acc.current_balance ?? acc.initial_balance ?? 0).toFixed(2)}
                         </option>
                       ))}
                     </select>
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.25rem' }}>
-                      💡 Si pagas con Yape o Efectivo, se descontará automáticamente de este saldo.
-                    </span>
                   </div>
                 )}
 
-                {/* Banco (si es tarjeta o transferencia o elegido) */}
-                {(paymentMethod === 'debito' || paymentMethod === 'credito' || paymentMethod === 'transferencia' || paymentMethod === 'otro') && (
-                  <div style={{ marginBottom: '1rem' }}>
-                    <label className="form-label" style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                      <Building size={14} color="#3b82f6" />
-                      <span>Banco / Entidad Financiera</span>
+                <div className="grid-2" style={{ gap: '0.65rem' }}>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <MapPin size={12} color="var(--text-muted)" />
+                      <span>Lugar / Establecimiento</span>
                     </label>
-                    <select
-                      value={bank}
-                      onChange={(e) => setBank(e.target.value)}
-                      className="form-select"
-                      style={{ fontSize: '0.85rem', padding: '0.65rem' }}
-                    >
-                      <option value="">Selecciona el banco (Opcional)</option>
-                      {PERU_BANKS.map(b => (
-                        <option key={b} value={b}>{b}</option>
-                      ))}
-                    </select>
+                    <input
+                      type="text"
+                      placeholder="Ej. Tambo, Metro, Grifo..."
+                      value={place}
+                      onChange={(e) => setPlace(e.target.value)}
+                      className="form-input"
+                      style={{ fontSize: '0.8rem', padding: '0.5rem 0.65rem' }}
+                    />
                   </div>
-                )}
 
-                {/* Lugar / Comercio */}
-                <div style={{ marginBottom: '1rem' }}>
-                  <label className="form-label" style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <MapPin size={14} color="#10b981" />
-                    <span>Lugar / Establecimiento (Opcional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ej: Tambo, Oxxo, Metro, Plaza Vea, Grifo Primax..."
-                    value={place}
-                    onChange={(e) => setPlace(e.target.value)}
-                    className="form-input"
-                    style={{ fontSize: '0.85rem', padding: '0.65rem' }}
-                  />
-                </div>
-
-                {/* Fecha y hora */}
-                <div>
-                  <label className="form-label" style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <Calendar size={14} color="var(--text-muted)" />
-                    <span>Fecha y Hora (Hora de Lima UTC-5)</span>
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="form-input"
-                    style={{ fontSize: '0.85rem', padding: '0.65rem' }}
-                  />
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <Calendar size={12} color="var(--text-muted)" />
+                      <span>Fecha y hora</span>
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="form-input"
+                      style={{ fontSize: '0.8rem', padding: '0.5rem 0.65rem' }}
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -551,32 +542,47 @@ export default function ExpenseForm({
           {/* Submit Button */}
           <button
             type="submit"
-            className={`btn ${isAntExpense ? 'btn-ant' : 'btn-primary'}`}
-            style={{ width: '100%', padding: '0.95rem', fontSize: '1.05rem', fontWeight: 700 }}
+            className="btn btn-primary"
+            style={{
+              width: '100%',
+              padding: '0.85rem 1.25rem',
+              fontSize: '1rem',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              boxShadow: 'var(--shadow-sm)'
+            }}
           >
-            {isAntExpense ? '🐜 Registrar Gasto Hormiga' : '💾 Guardar Gasto'}
+            <span>
+              {amount && parseFloat(amount) > 0
+                ? `Registrar ${currencySymbol} ${parseFloat(amount).toFixed(2)}`
+                : 'Registrar Gasto'}
+            </span>
+            <ArrowRight size={18} />
           </button>
         </form>
 
-        {/* Toast Notification */}
+        {/* Toast / Status */}
         {submitStatus && (
           <div className="animate-fade-in" style={{
-            marginTop: '1rem',
-            padding: '0.85rem 1rem',
-            background: submitStatus.type === 'warning' ? 'rgba(245, 158, 11, 0.15)' : 'var(--success-light)',
-            border: `1px solid ${submitStatus.type === 'warning' ? '#f59e0b' : 'var(--success)'}`,
+            marginTop: '0.85rem',
+            padding: '0.75rem 0.9rem',
+            background: submitStatus.type === 'warning' ? 'var(--warning-light)' : 'var(--success-light)',
+            border: `1px solid ${submitStatus.type === 'warning' ? 'var(--warning)' : 'var(--success)'}`,
             borderRadius: 'var(--radius-md)',
-            color: submitStatus.type === 'warning' ? '#fef08a' : '#a7f3d0',
+            color: submitStatus.type === 'warning' ? 'var(--warning)' : 'var(--success)',
             display: 'flex',
-            alignItems: 'flex-start',
-            gap: '0.6rem',
-            fontSize: '0.875rem',
-            lineHeight: '1.4'
+            alignItems: 'center',
+            gap: '0.5rem',
+            fontSize: '0.82rem',
+            fontWeight: 600
           }}>
             {submitStatus.type === 'warning' ? (
-              <AlertTriangle size={20} color="#f59e0b" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <AlertTriangle size={16} />
             ) : (
-              <CheckCircle2 size={20} color="var(--success)" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <CheckCircle2 size={16} />
             )}
             <span>{submitStatus.message}</span>
           </div>

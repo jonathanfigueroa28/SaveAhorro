@@ -314,8 +314,28 @@ export const DEFAULT_ACCOUNTS = [
 ];
 
 export const DEFAULT_INCOMES = [
-  { id: 'inc_1', title: 'Sueldo Principal (Soles)', amount: 2500, currency: 'PEN', frequency: 'mensual' },
-  { id: 'inc_2', title: 'Ingreso Extra / Remoto (USD)', amount: 0, currency: 'USD', frequency: 'mensual' }
+  {
+    id: 'inc_1',
+    title: 'Sueldo Principal (Empresa)',
+    gross_salary: 3000,
+    amount: 2619.30,
+    currency: 'PEN',
+    frequency: 'mensual',
+    regime: 'planilla_general',
+    pension_system_id: 'afp_integra',
+    has_suspension_4ta: false
+  },
+  {
+    id: 'inc_2',
+    title: 'Ingreso Extra / Remoto (USD)',
+    gross_salary: 0,
+    amount: 0,
+    currency: 'USD',
+    frequency: 'mensual',
+    regime: 'neto_directo',
+    pension_system_id: 'none',
+    has_suspension_4ta: false
+  }
 ];
 
 export const DEFAULT_FIXED_EXPENSES = [

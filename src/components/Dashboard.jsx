@@ -258,7 +258,7 @@ export default function Dashboard({
         {
           data,
           backgroundColor,
-          borderColor: '#131b2e',
+          borderColor: '#ffffff',
           borderWidth: 2,
           hoverOffset: 8
         }
@@ -299,15 +299,15 @@ export default function Dashboard({
       labels,
       datasets: [
         {
-          label: 'Gastos Hormiga 🐜',
+          label: 'Gastos Hormiga',
           data: antData,
           backgroundColor: '#f59e0b',
           borderRadius: 6,
         },
         {
-          label: 'Gastos Regulares 🛒',
+          label: 'Gastos Principales',
           data: regularData,
-          backgroundColor: '#6366f1',
+          backgroundColor: '#4f46e5',
           borderRadius: 6,
         }
       ]
@@ -344,23 +344,23 @@ export default function Dashboard({
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
               <Coins size={14} color="var(--primary)" /> Moneda:
             </span>
-            <div style={{ display: 'flex', gap: '0.25rem', background: 'rgba(255,255,255,0.05)', padding: '0.2rem', borderRadius: 'var(--radius-md)', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '0.25rem', background: '#f1f5f9', padding: '0.2rem', borderRadius: 'var(--radius-md)', flexWrap: 'wrap', border: '1px solid var(--border-color)' }}>
               <button
-                className={`chip ${currencyMode === 'consolidated' ? 'active' : ''}`}
+                className={`chip chip-currency-consolidated ${currencyMode === 'consolidated' ? 'active' : ''}`}
                 onClick={() => handleCurrencyModeSelect('consolidated')}
                 style={{ fontSize: '0.76rem', padding: '0.3rem 0.65rem' }}
               >
                 🌐 Consolidado
               </button>
               <button
-                className={`chip ${currencyMode === 'PEN' ? 'active' : ''}`}
+                className={`chip chip-currency-soles ${currencyMode === 'PEN' ? 'active' : ''}`}
                 onClick={() => handleCurrencyModeSelect('PEN')}
                 style={{ fontSize: '0.76rem', padding: '0.3rem 0.65rem' }}
               >
                 🇵🇪 Soles (S/)
               </button>
               <button
-                className={`chip ${currencyMode === 'USD' ? 'active' : ''}`}
+                className={`chip chip-currency-usd ${currencyMode === 'USD' ? 'active' : ''}`}
                 onClick={() => handleCurrencyModeSelect('USD')}
                 style={{ fontSize: '0.76rem', padding: '0.3rem 0.65rem' }}
               >
@@ -539,15 +539,15 @@ export default function Dashboard({
 
           {currencyMode === 'consolidated' && !convertUsdToPen ? (
             <div>
-              <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#fff' }}>
+              <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--text-main)' }}>
                 {formatMoney(totalPEN, 'PEN')}
               </div>
-              <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#10b981', marginTop: '0.2rem' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--success-text)', marginTop: '0.2rem' }}>
                 + {formatMoney(totalUSD, 'USD')}
               </div>
             </div>
           ) : (
-            <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#fff' }}>
+            <div style={{ fontSize: '1.8rem', fontWeight: '800', color: 'var(--text-main)' }}>
               {formatMoney(primaryTotal, currencyMode === 'USD' ? 'USD' : 'PEN')}
             </div>
           )}
@@ -571,32 +571,32 @@ export default function Dashboard({
         {/* Gastos Hormiga Highlight Card */}
         <div className="glass-card" style={{
           padding: '1.15rem',
-          border: '1px solid rgba(245, 158, 11, 0.35)',
-          background: 'radial-gradient(ellipse at top right, rgba(245, 158, 11, 0.12), rgba(18, 24, 40, 0.75))'
+          border: '1px solid var(--accent-ant-border)',
+          background: 'var(--accent-ant-bg)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
-            <span style={{ fontSize: '0.82rem', color: '#fef08a', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <Bug size={16} color="#f59e0b" /> Gastos Hormiga 🐜
+            <span style={{ fontSize: '0.82rem', color: 'var(--accent-ant)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <Bug size={16} color="var(--accent-ant)" /> Gastos Hormiga 🐜
             </span>
             <span className="badge badge-ant">{antPercentage}% del Total</span>
           </div>
 
           {currencyMode === 'consolidated' && !convertUsdToPen ? (
             <div>
-              <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#fef08a' }}>
+              <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#92400e' }}>
                 {formatMoney(antPEN, 'PEN')}
               </div>
-              <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#fef08a', marginTop: '0.2rem' }}>
+              <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#b45309', marginTop: '0.2rem' }}>
                 + {formatMoney(antUSD, 'USD')}
               </div>
             </div>
           ) : (
-            <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#fef08a' }}>
+            <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#92400e' }}>
               {formatMoney(primaryAntTotal, currencyMode === 'USD' ? 'USD' : 'PEN')}
             </div>
           )}
 
-          <p style={{ fontSize: '0.74rem', color: '#fde68a', marginTop: '0.45rem' }}>
+          <p style={{ fontSize: '0.74rem', color: 'var(--accent-ant)', marginTop: '0.45rem' }}>
             {primaryAntTotal > 50
               ? '⚠️ Atención: Micro-gastos diarios acumulando una suma considerable.'
               : '👍 Buen control de fugas de dinero hormiga.'}

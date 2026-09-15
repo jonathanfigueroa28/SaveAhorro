@@ -259,54 +259,55 @@ export default function LandingPage({ onStartDemo, onEnterApp, onOpenTutorial, i
         <div className="grid-2" style={{ gap: '1.5rem' }}>
           
           {/* PERSONAJE 1: CARLOS */}
-          <div className="glass-card animate-fade-in" style={{
+          <div className="card animate-fade-in" style={{
             padding: '1.5rem',
-            border: '2px solid rgba(16, 185, 129, 0.4)',
-            background: 'radial-gradient(ellipse at top left, rgba(16, 185, 129, 0.12), rgba(18, 24, 40, 0.85))'
+            border: '2px solid rgba(5, 150, 105, 0.3)',
+            background: 'var(--bg-card)',
+            boxShadow: 'var(--shadow-md)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
               <div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--success)', textTransform: 'uppercase' }}>
-                  Caso 1: Buena Conducta Financiera 🟢
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--success)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Caso 1: Finanzas Controladas
                 </span>
-                <h4 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#fff', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span>Carlos Mendoza</span>
-                  <span style={{ fontSize: '1.1rem' }}>🐜👑</span>
+                <h4 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '0.2rem', margin: 0 }}>
+                  Carlos Mendoza
                 </h4>
-                <p style={{ fontSize: '0.8rem', color: '#a7f3d0' }}>
-                  "El Hormigón Ahorrador"
+                <p style={{ fontSize: '0.78rem', color: 'var(--success)', fontWeight: 600, margin: '0.15rem 0 0 0' }}>
+                  Control de micro-gastos y liquidez positiva
                 </p>
               </div>
               <div style={{
-                width: '42px',
-                height: '42px',
+                width: '38px',
+                height: '38px',
                 borderRadius: '50%',
-                background: 'rgba(16, 185, 129, 0.2)',
+                background: 'var(--success-light)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
-                <Smile size={24} color="#10b981" />
+                <Smile size={22} color="var(--success)" />
               </div>
             </div>
 
             <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: '1.5', marginBottom: '1rem' }}>
-              Anota sus cafecitos y compras al paso en 3 segundos. Disfruta la vida pero sabe cuánto le queda en Yape y en efectivo.
+              Anota sus compras en segundos. Disfruta el día a día pero sabe exactamente cuánto le queda en Yape, tarjeta y ahorros.
             </p>
 
             <div style={{
-              background: 'rgba(255,255,255,0.03)',
+              background: 'var(--bg-card-hover)',
               borderRadius: 'var(--radius-md)',
               padding: '0.85rem',
               fontSize: '0.8rem',
               marginBottom: '1.25rem',
               display: 'flex',
               flexDirection: 'column',
-              gap: '0.4rem'
+              gap: '0.4rem',
+              border: '1px solid var(--border-color)'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Sueldo mensual:</span>
-                <strong style={{ color: '#fff' }}>S/ 3,200 + $ 200</strong>
+                <span style={{ color: 'var(--text-muted)' }}>Sueldo neto mensual:</span>
+                <strong style={{ color: 'var(--text-main)' }}>S/ 3,200 + $ 200</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Gastos hormiga del mes:</span>
@@ -314,85 +315,86 @@ export default function LandingPage({ onStartDemo, onEnterApp, onOpenTutorial, i
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Tarjeta de crédito a pagar:</span>
-                <strong style={{ color: '#fff' }}>S/ 380 (sin deudas moras)</strong>
+                <strong style={{ color: 'var(--text-main)' }}>S/ 380 (al día)</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.35rem', borderTop: '1px solid var(--border-color)' }}>
-                <span style={{ color: 'var(--success)', fontWeight: 700 }}>Proyección próximo mes:</span>
-                <strong style={{ color: 'var(--success)', fontSize: '0.95rem' }}>+ S/ 1,850 libres 🎉</strong>
+                <span style={{ color: 'var(--success)', fontWeight: 700 }}>Liquidez libre estimada:</span>
+                <strong style={{ color: 'var(--success)', fontSize: '0.95rem' }}>+ S/ 1,850 libres</strong>
               </div>
             </div>
 
             <button
               onClick={() => onStartDemo('carlos')}
               className="btn btn-primary"
-              style={{ width: '100%', padding: '0.75rem', fontWeight: 700, fontSize: '0.9rem' }}
+              style={{ width: '100%', padding: '0.75rem', fontWeight: 700, fontSize: '0.88rem' }}
             >
-              <span>Explorar Demo como Carlos 🐜</span>
+              <span>Explorar Demo como Carlos</span>
               <ArrowRight size={16} />
             </button>
           </div>
 
           {/* PERSONAJE 2: PEPE */}
-          <div className="glass-card animate-fade-in" style={{
+          <div className="card animate-fade-in" style={{
             padding: '1.5rem',
-            border: '2px solid rgba(239, 68, 68, 0.4)',
-            background: 'radial-gradient(ellipse at top left, rgba(239, 68, 68, 0.12), rgba(18, 24, 40, 0.85))'
+            border: '2px solid rgba(225, 29, 72, 0.3)',
+            background: 'var(--bg-card)',
+            boxShadow: 'var(--shadow-md)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
               <div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--danger)', textTransform: 'uppercase' }}>
-                  Caso 2: En Peligro Financiero 🔴
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Caso 2: En Riesgo de Déficit
                 </span>
-                <h4 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#fff', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span>Pepe Gastatodo</span>
-                  <span style={{ fontSize: '1.1rem' }}>💸🏃💨</span>
+                <h4 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '0.2rem', margin: 0 }}>
+                  Pepe Gastatodo
                 </h4>
-                <p style={{ fontSize: '0.8rem', color: '#fca5a5' }}>
-                  "El Gastador Fugitivo"
+                <p style={{ fontSize: '0.78rem', color: 'var(--danger)', fontWeight: 600, margin: '0.15rem 0 0 0' }}>
+                  Micro-fugas y sobregiro de tarjeta
                 </p>
               </div>
               <div style={{
-                width: '42px',
-                height: '42px',
+                width: '38px',
+                height: '38px',
                 borderRadius: '50%',
-                background: 'rgba(239, 68, 68, 0.2)',
+                background: 'var(--danger-light)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
-                <Frown size={24} color="#ef4444" />
+                <Frown size={22} color="var(--danger)" />
               </div>
             </div>
 
             <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: '1.5', marginBottom: '1rem' }}>
-              Pide delivery casi todas las noches, toma taxi por flojera, usa la tarjeta de crédito creyendo que es dinero extra y a fin de mes no sabe qué hacer.
+              Pide delivery por impulso, usa la tarjeta de crédito creyendo que es dinero extra y a fin de mes queda en rojo.
             </p>
 
             <div style={{
-              background: 'rgba(255,255,255,0.03)',
+              background: 'var(--bg-card-hover)',
               borderRadius: 'var(--radius-md)',
               padding: '0.85rem',
               fontSize: '0.8rem',
               marginBottom: '1.25rem',
               display: 'flex',
               flexDirection: 'column',
-              gap: '0.4rem'
+              gap: '0.4rem',
+              border: '1px solid var(--border-color)'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Sueldo mensual:</span>
-                <strong style={{ color: '#fff' }}>S/ 2,400</strong>
+                <span style={{ color: 'var(--text-muted)' }}>Sueldo neto mensual:</span>
+                <strong style={{ color: 'var(--text-main)' }}>S/ 2,400</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Gastos hormiga desbordados:</span>
-                <strong style={{ color: 'var(--danger)' }}>S/ 1,320 (disparados)</strong>
+                <strong style={{ color: 'var(--danger)' }}>S/ 1,320 (descontrol)</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Tarjeta de crédito reventada:</span>
-                <strong style={{ color: 'var(--danger)' }}>S/ 2,150 (en riesgo mora)</strong>
+                <span style={{ color: 'var(--text-muted)' }}>Tarjeta de crédito a pagar:</span>
+                <strong style={{ color: 'var(--danger)' }}>S/ 2,150 (riesgo mora)</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.35rem', borderTop: '1px solid var(--border-color)' }}>
-                <span style={{ color: 'var(--danger)', fontWeight: 700 }}>Déficit próximo mes:</span>
-                <strong style={{ color: 'var(--danger)', fontSize: '0.95rem' }}>- S/ 950 en rojo ⚠️</strong>
+                <span style={{ color: 'var(--danger)', fontWeight: 700 }}>Déficit proyectado:</span>
+                <strong style={{ color: 'var(--danger)', fontSize: '0.95rem' }}>- S/ 950 en rojo</strong>
               </div>
             </div>
 
@@ -403,12 +405,12 @@ export default function LandingPage({ onStartDemo, onEnterApp, onOpenTutorial, i
                 width: '100%',
                 padding: '0.75rem',
                 fontWeight: 700,
-                fontSize: '0.9rem',
-                borderColor: 'rgba(239, 68, 68, 0.4)',
-                color: '#fca5a5'
+                fontSize: '0.88rem',
+                borderColor: 'rgba(225, 29, 72, 0.3)',
+                color: 'var(--danger)'
               }}
             >
-              <span>Ver la Crisis de Pepe 💸</span>
+              <span>Ver la Situación de Pepe</span>
               <ArrowRight size={16} />
             </button>
           </div>

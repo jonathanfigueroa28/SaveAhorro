@@ -17,6 +17,11 @@ export default function Navbar({
   onShowLanding,
   onLogout
 }) {
+  const rawFirst = userProfile?.firstName || 'Jonathan';
+  const cleanFirst = (rawFirst.includes('.') || rawFirst.includes('@'))
+    ? (rawFirst.split(/[.@]/)[0].charAt(0).toUpperCase() + rawFirst.split(/[.@]/)[0].slice(1))
+    : rawFirst;
+
   return (
     <header style={{ marginBottom: '1.25rem' }}>
       <div className="header-bar">
@@ -37,27 +42,26 @@ export default function Navbar({
               <Bug size={24} color="#fff" />
             </div>
             <div>
-              <h1 style={{ fontSize: '1.3rem', lineHeight: '1.1', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <h1 style={{ fontSize: '1.3rem', lineHeight: '1.1', display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 800 }}>
                 <span>Save<span style={{ color: 'var(--primary)' }}>Ahorro</span></span>
-                <span style={{ fontSize: '1.1rem' }}>🐜</span>
               </h1>
-              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', margin: 0, fontWeight: 500 }}>
                 Gastos Hormiga & Liquidez Real
               </p>
             </div>
           </div>
 
-          {/* User Profile & Cloud status row */}
+          {/* Quick User Greeting & Action Pills */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
             {/* Friendly Greeting & Name editor with Logout */}
             <div style={{
               display: 'inline-flex',
               alignItems: 'center',
-              background: 'rgba(99, 102, 241, 0.12)',
-              border: '1px solid rgba(99, 102, 241, 0.28)',
-              borderRadius: 'var(--radius-md)',
-              padding: '0.2rem 0.4rem',
-              gap: '0.25rem'
+              gap: '0.35rem',
+              background: '#f1f5f9',
+              border: '1px solid var(--border-color)',
+              padding: '0.2rem 0.45rem',
+              borderRadius: 'var(--radius-full)'
             }}>
               <button
                 onClick={onOpenProfileModal}
@@ -68,7 +72,7 @@ export default function Navbar({
                   background: 'transparent',
                   border: 'none',
                   cursor: 'pointer',
-                  color: '#fff',
+                  color: 'var(--text-main)',
                   padding: '0.15rem 0.35rem'
                 }}
                 title="Haz clic para editar tu nombre y apellidos"
@@ -77,7 +81,7 @@ export default function Navbar({
                   width: '24px',
                   height: '24px',
                   borderRadius: '50%',
-                  background: 'linear-gradient(135deg, var(--primary), #8b5cf6)',
+                  background: 'var(--primary)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -85,10 +89,10 @@ export default function Navbar({
                   fontSize: '0.75rem',
                   fontWeight: 700
                 }}>
-                  {userProfile?.firstName ? userProfile.firstName.charAt(0).toUpperCase() : 'J'}
+                  {cleanFirst.charAt(0).toUpperCase()}
                 </div>
-                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#e0e7ff' }}>
-                  Hola, {userProfile?.firstName || 'Jonathan'} 👋
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--primary)' }}>
+                  Hola, {cleanFirst}
                 </span>
               </button>
 
@@ -96,10 +100,10 @@ export default function Navbar({
                 <button
                   onClick={onLogout}
                   style={{
-                    background: 'rgba(239, 68, 68, 0.15)',
-                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    background: 'var(--danger-light)',
+                    border: '1px solid rgba(239, 68, 68, 0.2)',
                     borderRadius: '6px',
-                    color: '#fca5a5',
+                    color: 'var(--danger)',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
@@ -112,7 +116,7 @@ export default function Navbar({
                   title="Cerrar sesión / Salir a la portada"
                   aria-label="Cerrar sesión"
                 >
-                  <LogOut size={14} color="#fca5a5" />
+                  <LogOut size={14} color="var(--danger)" />
                 </button>
               )}
             </div>
@@ -125,7 +129,7 @@ export default function Navbar({
                 style={{ padding: '0.45rem 0.65rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                 title="Ver el tutorial guiado de 3 pasos"
               >
-                <Sparkles size={14} color="#f59e0b" />
+                <Sparkles size={14} color="var(--accent-ant)" />
                 <span className="hide-mobile">Tutorial</span>
               </button>
             )}
@@ -138,7 +142,7 @@ export default function Navbar({
                 style={{ padding: '0.45rem 0.65rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                 title="Ver presentación y demos interactivas"
               >
-                <span>🎭 Demos</span>
+                <span>Demos</span>
               </button>
             )}
 
@@ -160,7 +164,7 @@ export default function Navbar({
                 <CloudOff size={16} color="var(--text-muted)" />
               )}
               <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>
-                {cloudEnabled ? 'Nube 🟢' : 'Nube'}
+                Nube
               </span>
             </button>
           </div>
@@ -171,25 +175,19 @@ export default function Navbar({
           <div className="currency-toggle-group">
             <button
               onClick={() => onCurrencyChange && onCurrencyChange('PEN')}
-              className="currency-btn"
-              style={{
-                background: currentCurrency === 'PEN' ? 'var(--primary)' : 'transparent',
-                color: currentCurrency === 'PEN' ? '#fff' : 'var(--text-muted)'
-              }}
+              className={`currency-btn ${currentCurrency === 'PEN' ? 'soles-active' : 'inactive'}`}
               title="Moneda principal: Soles peruanos (PEN)"
             >
-              🇵🇪 Soles (S/)
+              <span>🇵🇪</span>
+              <span>S/ Soles</span>
             </button>
             <button
               onClick={() => onCurrencyChange && onCurrencyChange('USD')}
-              className="currency-btn"
-              style={{
-                background: currentCurrency === 'USD' ? 'var(--primary)' : 'transparent',
-                color: currentCurrency === 'USD' ? '#fff' : 'var(--text-muted)'
-              }}
+              className={`currency-btn ${currentCurrency === 'USD' ? 'usd-active' : 'inactive'}`}
               title="Moneda principal: Dólares americanos (USD)"
             >
-              💵 Dólares ($)
+              <span>💵</span>
+              <span>$ Dólares</span>
             </button>
           </div>
 
@@ -203,7 +201,7 @@ export default function Navbar({
             >
               <ArrowRightLeft size={13} color="var(--primary)" />
               <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>TC:</span>
-              <strong style={{ fontSize: '0.8rem', color: '#e0e7ff' }}>S/ {exchangeRate.toFixed(3)}</strong>
+              <strong style={{ fontSize: '0.8rem', color: 'var(--text-main)' }}>S/ {exchangeRate.toFixed(3)}</strong>
             </div>
           )}
         </div>
