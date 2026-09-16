@@ -26,49 +26,40 @@ export default function InteractiveTour({
 
   const tourSteps = [
     {
-      title: 'Atajos Rápidos de 1 Toque ☕🍵',
-      badge: 'Paso 1 de 5 • Registro Ultrarrápido',
-      icon: <Sparkles size={20} color="#f59e0b" />,
+      title: 'Registro Rápido y Atajos de 1 Toque',
+      badge: 'Paso 1 de 4 • Registrar Gasto',
+      icon: <Sparkles size={20} color="#b45309" />,
       highlightTab: 'form',
       targetId: 'tour-quick-presets',
-      description: '¡No pierdas tiempo escribiendo! Toca cualquiera de estos atajos populares peruanos (café, emoliente, metropolitano, menú criollo). Rellenan el monto y la categoría al instante.',
-      actionHint: '👇 Mira el recuadro resaltado: toca cualquier atajo para probarlo.'
+      description: 'Toca cualquiera de los atajos frecuentes peruanos (Café, Emoliente, Metropolitano, Menú) para completar monto y categoría al instante.',
+      actionHint: 'Toca cualquier atajo para ver cómo se completa de inmediato.'
     },
     {
-      title: 'Monto y Moneda (Soles o Dólares) 🇵🇪💵',
-      badge: 'Paso 2 de 5 • Ingreso de Monto',
-      icon: <Coins size={20} color="#10b981" />,
-      highlightTab: 'form',
-      targetId: 'tour-amount-section',
-      description: 'Aquí ves el dinero exacto del gasto. Puedes cambiar entre Soles (S/) y Dólares ($) con un solo toque y el sistema aplicará la tasa de cambio en vivo.',
-      actionHint: '💡 Si pulsaste un atajo rápido, verás que el número ya se escribió solo.'
+      title: 'Liquidez Real y Ahorros de Reserva',
+      badge: 'Paso 2 de 4 • Cuentas & Ahorro',
+      icon: <Wallet size={20} color="#059669" />,
+      highlightTab: 'accounts',
+      targetId: 'tour-liquidity-heroes',
+      description: 'Conoce tu dinero disponible en mano hoy, tus ahorros protegidos intocables y la liquidez que te sobrará el próximo mes descontando gastos fijos y tarjeta.',
+      actionHint: 'Tus gastos diarios se descuentan en tiempo real de tus cuentas operativas.'
     },
     {
-      title: 'Billeteras y Tarjeta de Crédito 🟣💳',
-      badge: 'Paso 3 de 5 • Saldo Real en Cuentas',
-      icon: <CreditCard size={20} color="#3b82f6" />,
-      highlightTab: 'form',
-      targetId: 'tour-payment-methods',
-      description: 'En "Más detalles", elige si pagaste con Yape, Plin, Efectivo o Tarjeta. Al guardarlo, se descuenta automáticamente de tu saldo en ese banco.',
-      actionHint: '💳 Si pagas con Tarjeta de Crédito, se anota para pagarse el siguiente mes y evitar intereses.'
-    },
-    {
-      title: 'Termómetro de tu Presupuesto Mensual 📊',
-      badge: 'Paso 4 de 5 • Dashboard',
-      icon: <LayoutDashboard size={20} color="#6366f1" />,
+      title: 'Termómetro de Presupuesto Mensual',
+      badge: 'Paso 3 de 4 • Dashboard',
+      icon: <LayoutDashboard size={20} color="#2563eb" />,
       highlightTab: 'dashboard',
       targetId: 'tour-budget-card',
-      description: 'Esta barra te avisa con colores si estás en zona verde (seguro), ámbar (cuidado) o roja (déficit). Sabrás con precisión cuánto te queda para terminar el mes.',
-      actionHint: '👀 Puedes ajustar tu límite mensual en cualquier momento con el botón "Editar".'
+      description: 'Esta barra te avisa con colores si estás en zona verde (seguro) o roja (déficit) para que nunca te quedes corto a fin de mes.',
+      actionHint: 'Puedes ajustar tu presupuesto en cualquier momento con el botón Editar.'
     },
     {
-      title: 'El Gran Contraste: Carlos vs. Pepe 🎭',
-      badge: 'Paso 5 de 5 • Comparación en Vivo',
-      icon: <Smile size={20} color="#8b5cf6" />,
-      highlightTab: 'dashboard',
-      targetId: 'tour-persona-switcher',
-      description: 'Mira la diferencia arriba: "🐜 Carlos" cuida sus gastos hormiga y le sobra dinero; "💸 Pepe" gasta en antojitos y su tarjeta de crédito lo asfixia a fin de mes.',
-      actionHint: '✨ ¡Toca "💸 Pepe (En Déficit)" en la barra superior para ver el impacto!'
+      title: 'Historial y Auditoría de Gastos',
+      badge: 'Paso 4 de 4 • Historial',
+      icon: <CreditCard size={20} color="#475569" />,
+      highlightTab: 'history',
+      targetId: 'tour-history-controls',
+      description: 'Revisa cada movimiento registrado, filtra por fecha, cuenta o moneda, y edita o elimina fácilmente cualquier registro erróneo.',
+      actionHint: 'Puedes exportar tus registros a Excel/CSV con un solo clic.'
     }
   ];
 
@@ -246,9 +237,9 @@ export default function InteractiveTour({
           left: isMobile ? '14px' : `${popoverLeft}px`,
           right: isMobile ? '14px' : 'auto',
           maxWidth: isMobile ? 'calc(100vw - 28px)' : '420px',
-          background: 'rgba(15, 23, 42, 0.97)',
+          background: '#ffffff',
           border: '2px solid var(--primary)',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.75), 0 0 25px rgba(99, 102, 241, 0.4)',
+          boxShadow: '0 20px 40px rgba(15, 23, 42, 0.2)',
           borderRadius: 'var(--radius-lg)',
           padding: '1.25rem 1.25rem 1rem 1.25rem',
           zIndex: 2020,
@@ -279,7 +270,7 @@ export default function InteractiveTour({
             position: 'absolute',
             top: '0.85rem',
             right: '0.85rem',
-            background: 'rgba(255,255,255,0.06)',
+            background: '#f1f5f9',
             border: '1px solid var(--border-color)',
             color: 'var(--text-muted)',
             borderRadius: '50%',
@@ -302,7 +293,7 @@ export default function InteractiveTour({
             width: '34px',
             height: '34px',
             borderRadius: 'var(--radius-md)',
-            background: 'rgba(99, 102, 241, 0.18)',
+            background: 'var(--primary-light)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -311,28 +302,29 @@ export default function InteractiveTour({
             {step.icon}
           </div>
           <div>
-            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--accent-ant)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {step.badge}
             </span>
-            <h4 style={{ fontSize: '1rem', fontWeight: 800, lineHeight: '1.2', color: '#fff' }}>
+            <h4 style={{ fontSize: '1rem', fontWeight: 800, lineHeight: '1.2', color: 'var(--text-main)', margin: 0 }}>
               {step.title}
             </h4>
           </div>
         </div>
 
         {/* Body Description */}
-        <p style={{ fontSize: '0.82rem', color: '#e2e8f0', lineHeight: '1.45', marginBottom: '0.65rem' }}>
+        <p style={{ fontSize: '0.82rem', color: 'var(--text-main)', lineHeight: '1.5', marginBottom: '0.65rem' }}>
           {step.description}
         </p>
 
         {/* Action Hint Banner */}
         <div style={{
-          background: 'rgba(245, 158, 11, 0.12)',
-          borderLeft: '3px solid #f59e0b',
+          background: 'var(--accent-ant-bg)',
+          borderLeft: '3px solid var(--accent-ant)',
           borderRadius: '4px',
-          padding: '0.4rem 0.65rem',
+          padding: '0.45rem 0.65rem',
           fontSize: '0.75rem',
-          color: '#fef08a',
+          color: '#92400e',
+          fontWeight: 500,
           marginBottom: '0.85rem'
         }}>
           {step.actionHint}

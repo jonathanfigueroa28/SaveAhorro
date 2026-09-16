@@ -29,9 +29,10 @@ export default function LandingPage({ onStartDemo, onEnterApp, onOpenTutorial, i
         justifyContent: 'space-between',
         padding: '1rem 1.25rem',
         marginBottom: '2rem',
-        background: 'rgba(255, 255, 255, 0.03)',
+        background: '#ffffff',
         border: '1px solid var(--border-color)',
-        borderRadius: 'var(--radius-lg)'
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: 'var(--shadow-sm)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
           <div style={{
@@ -84,16 +85,16 @@ export default function LandingPage({ onStartDemo, onEnterApp, onOpenTutorial, i
           display: 'inline-flex',
           alignItems: 'center',
           gap: '0.45rem',
-          background: 'rgba(245, 158, 11, 0.12)',
-          border: '1px solid rgba(245, 158, 11, 0.3)',
-          color: '#fef08a',
+          background: '#fef3c7',
+          border: '1px solid #fde68a',
+          color: '#92400e',
           padding: '0.35rem 0.85rem',
           borderRadius: '999px',
           fontSize: '0.82rem',
           fontWeight: 700,
           marginBottom: '1.25rem'
         }}>
-          <Sparkles size={15} color="#f59e0b" />
+          <Sparkles size={15} color="#d97706" />
           <span>¡Dile adiós a quedarte sin plata a fin de mes!</span>
         </div>
 
@@ -307,19 +308,19 @@ export default function LandingPage({ onStartDemo, onEnterApp, onOpenTutorial, i
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Sueldo neto mensual:</span>
-                <strong style={{ color: 'var(--text-main)' }}>S/ 3,200 + $ 200</strong>
+                <strong style={{ color: 'var(--text-main)' }}>S/ 3,500.00</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Gastos hormiga del mes:</span>
-                <strong style={{ color: 'var(--success)' }}>S/ 140 (bajo control)</strong>
+                <strong style={{ color: 'var(--success)' }}>S/ 65.00 (bajo control)</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Tarjeta de crédito a pagar:</span>
-                <strong style={{ color: 'var(--text-main)' }}>S/ 380 (al día)</strong>
+                <strong style={{ color: 'var(--text-main)' }}>S/ 0.00 (al día)</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.35rem', borderTop: '1px solid var(--border-color)' }}>
                 <span style={{ color: 'var(--success)', fontWeight: 700 }}>Liquidez libre estimada:</span>
-                <strong style={{ color: 'var(--success)', fontSize: '0.95rem' }}>+ S/ 1,850 libres</strong>
+                <strong style={{ color: 'var(--success)', fontSize: '0.95rem' }}>+ S/ 1,680.00 libres</strong>
               </div>
             </div>
 
@@ -382,19 +383,19 @@ export default function LandingPage({ onStartDemo, onEnterApp, onOpenTutorial, i
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Sueldo neto mensual:</span>
-                <strong style={{ color: 'var(--text-main)' }}>S/ 2,400</strong>
+                <strong style={{ color: 'var(--text-main)' }}>S/ 3,500.00 (el mismo)</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Gastos hormiga desbordados:</span>
-                <strong style={{ color: 'var(--danger)' }}>S/ 1,320 (descontrol)</strong>
+                <strong style={{ color: 'var(--danger)' }}>S/ 1,240.00 (descontrol)</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Tarjeta de crédito a pagar:</span>
-                <strong style={{ color: 'var(--danger)' }}>S/ 2,150 (riesgo mora)</strong>
+                <strong style={{ color: 'var(--danger)' }}>S/ 1,850.00 (sobregirada)</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.35rem', borderTop: '1px solid var(--border-color)' }}>
                 <span style={{ color: 'var(--danger)', fontWeight: 700 }}>Déficit proyectado:</span>
-                <strong style={{ color: 'var(--danger)', fontSize: '0.95rem' }}>- S/ 950 en rojo</strong>
+                <strong style={{ color: 'var(--danger)', fontSize: '0.95rem' }}>- S/ 675.00 en rojo</strong>
               </div>
             </div>
 

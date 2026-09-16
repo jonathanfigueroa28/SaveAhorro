@@ -126,23 +126,22 @@ export default function Navbar({
               <button
                 onClick={onOpenTutorial}
                 className="btn btn-secondary"
-                style={{ padding: '0.45rem 0.65rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                title="Ver el tutorial guiado de 3 pasos"
+                style={{
+                  padding: '0.42rem 0.75rem',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  borderRadius: 'var(--radius-md)',
+                  background: '#ffffff',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-main)'
+                }}
+                title="Guía rápida para usar SaveAhorro"
               >
                 <Sparkles size={14} color="var(--accent-ant)" />
-                <span className="hide-mobile">Tutorial</span>
-              </button>
-            )}
-
-            {/* Landing / Demo toggle button */}
-            {onShowLanding && (
-              <button
-                onClick={onShowLanding}
-                className="btn btn-secondary"
-                style={{ padding: '0.45rem 0.65rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                title="Ver presentación y demos interactivas"
-              >
-                <span>Demos</span>
+                <span>Tutorial</span>
               </button>
             )}
 

@@ -251,7 +251,7 @@ export default function ExpenseList({
     <div className="animate-fade-in" style={{ width: '100%', maxWidth: '100%', overflowX: 'hidden' }}>
       
       {/* Header and Search Filters */}
-      <div className="glass-card" style={{ padding: '1.25rem', marginBottom: '1.25rem' }}>
+      <div id="tour-history-controls" className="glass-card" style={{ padding: '1.25rem', marginBottom: '1.25rem' }}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',

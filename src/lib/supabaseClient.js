@@ -302,49 +302,20 @@ const LOCAL_STORAGE_KEY_ACCOUNTS = 'saveahorro_accounts_v2';
 const LOCAL_STORAGE_KEY_INCOMES = 'saveahorro_incomes_v2';
 const LOCAL_STORAGE_KEY_FIXED = 'saveahorro_fixed_expenses_v2';
 
-// Cuentas predeterminadas (incluye Efectivo, Yape BCP, Plin, Ahorros Soles y Dólares)
+// Cuentas predeterminadas en cero para nuevos usuarios (Efectivo, Yape, Plin, BCP, Ahorros Soles y Dólares)
 export const DEFAULT_ACCOUNTS = [
-  { id: 'acc_efectivo', name: '💵 Efectivo (Billetera)', type: 'efectivo', bank: 'Efectivo', currency: 'PEN', initial_balance: 100, is_operating: true, color: '#10b981' },
-  { id: 'acc_yape', name: '🟣 Yape (BCP Principal)', type: 'billetera_digital', bank: 'BCP', currency: 'PEN', initial_balance: 200, is_operating: true, color: '#8b5cf6' },
-  { id: 'acc_plin', name: '🔵 Plin (Interbank / BBVA)', type: 'billetera_digital', bank: 'Interbank', currency: 'PEN', initial_balance: 50, is_operating: true, color: '#06b6d4' },
-  { id: 'acc_bcp_debito', name: '💳 Cuenta Corriente BCP', type: 'banco', bank: 'BCP', currency: 'PEN', initial_balance: 500, is_operating: true, color: '#3b82f6' },
-  { id: 'acc_ahorro_pen', name: '🏦 Ahorro Reserva Soles', type: 'ahorros', bank: 'BBVA', currency: 'PEN', initial_balance: 3400, is_operating: false, color: '#f59e0b' },
-  { id: 'acc_ahorro_usd', name: '💵 Ahorro Reserva Dólares', type: 'ahorros', bank: 'Interbank', currency: 'USD', initial_balance: 2000, is_operating: false, color: '#10b981' },
+  { id: 'acc_efectivo', name: '💵 Efectivo (Billetera)', type: 'efectivo', bank: 'Efectivo', currency: 'PEN', initial_balance: 0, is_operating: true, color: '#10b981' },
+  { id: 'acc_yape', name: '🟣 Yape (BCP Principal)', type: 'billetera_digital', bank: 'BCP', currency: 'PEN', initial_balance: 0, is_operating: true, color: '#8b5cf6' },
+  { id: 'acc_plin', name: '🔵 Plin (Interbank / BBVA)', type: 'billetera_digital', bank: 'Interbank', currency: 'PEN', initial_balance: 0, is_operating: true, color: '#06b6d4' },
+  { id: 'acc_bcp_debito', name: '💳 Cuenta Corriente BCP', type: 'banco', bank: 'BCP', currency: 'PEN', initial_balance: 0, is_operating: true, color: '#3b82f6' },
+  { id: 'acc_ahorro_pen', name: '🏦 Ahorro Reserva Soles', type: 'ahorros', bank: 'BBVA', currency: 'PEN', initial_balance: 0, is_operating: false, color: '#f59e0b' },
+  { id: 'acc_ahorro_usd', name: '💵 Ahorro Reserva Dólares', type: 'ahorros', bank: 'Interbank', currency: 'USD', initial_balance: 0, is_operating: false, color: '#10b981' },
   { id: 'acc_tc_bcp', name: '💳 Tarjeta Crédito BCP', type: 'tarjeta_credito', bank: 'BCP', currency: 'PEN', initial_balance: 0, is_operating: false, color: '#ef4444' }
 ];
 
-export const DEFAULT_INCOMES = [
-  {
-    id: 'inc_1',
-    title: 'Sueldo Principal (Empresa)',
-    gross_salary: 3000,
-    amount: 2619.30,
-    currency: 'PEN',
-    frequency: 'mensual',
-    regime: 'planilla_general',
-    pension_system_id: 'afp_integra',
-    has_suspension_4ta: false
-  },
-  {
-    id: 'inc_2',
-    title: 'Ingreso Extra / Remoto (USD)',
-    gross_salary: 0,
-    amount: 0,
-    currency: 'USD',
-    frequency: 'mensual',
-    regime: 'neto_directo',
-    pension_system_id: 'none',
-    has_suspension_4ta: false
-  }
-];
+export const DEFAULT_INCOMES = [];
 
-export const DEFAULT_FIXED_EXPENSES = [
-  { id: 'fix_1', title: 'Alquiler / Casa', amount: 800, currency: 'PEN', category: 'servicios', due_day: 5, is_paid: false },
-  { id: 'fix_2', title: 'Luz (Enel / Luz del Sur)', amount: 120, currency: 'PEN', category: 'servicios', due_day: 18, is_paid: false },
-  { id: 'fix_3', title: 'Agua (Sedapal)', amount: 45, currency: 'PEN', category: 'servicios', due_day: 20, is_paid: false },
-  { id: 'fix_4', title: 'Internet Fibra Óptica', amount: 90, currency: 'PEN', category: 'servicios', due_day: 15, is_paid: false },
-  { id: 'fix_5', title: 'Suscripciones (Netflix / Spotify)', amount: 55, currency: 'PEN', category: 'entretenimiento', due_day: 25, is_paid: false }
-];
+export const DEFAULT_FIXED_EXPENSES = [];
 
 // --- CUENTAS CRUD ---
 export const fetchAccounts = async () => {
@@ -754,58 +725,10 @@ export const setMonthlyBudget = (amount) => {
   localStorage.setItem(LOCAL_STORAGE_KEY_BUDGET, amount.toString());
 };
 
-// Seed demo data for first time user experience (adaptado a Lima, Perú en Soles)
+// Seed inicial vacío para nuevo usuario real
 function getInitialSeedData() {
-  const today = new Date();
-  const seed = [
-    {
-      id: 'demo_1',
-      amount: 3.50,
-      currency: 'PEN',
-      category: 'gastos-hormiga',
-      description: 'Café pasado y galleta ☕🍪',
-      is_ant_expense: true,
-      date: new Date(today.getTime() - 2 * 3600 * 1000).toISOString()
-    },
-    {
-      id: 'demo_2',
-      amount: 2.00,
-      currency: 'PEN',
-      category: 'gastos-hormiga',
-      description: 'Emoliente caliente en la esquina 🍵',
-      is_ant_expense: true,
-      date: new Date(today.getTime() - 20 * 3600 * 1000).toISOString()
-    },
-    {
-      id: 'demo_3',
-      amount: 65.00,
-      currency: 'PEN',
-      category: 'comida',
-      description: 'Compras semanales en mercado / súper 🛒',
-      is_ant_expense: false,
-      date: new Date(today.getTime() - 48 * 3600 * 1000).toISOString()
-    },
-    {
-      id: 'demo_4',
-      amount: 1.50,
-      currency: 'PEN',
-      category: 'transporte',
-      description: 'Pasaje en combi / micro 🚌',
-      is_ant_expense: false,
-      date: new Date(today.getTime() - 72 * 3600 * 1000).toISOString()
-    },
-    {
-      id: 'demo_5',
-      amount: 2.50,
-      currency: 'PEN',
-      category: 'gastos-hormiga',
-      description: 'Gaseosa Inca Kola / agua al paso 🥤',
-      is_ant_expense: true,
-      date: new Date(today.getTime() - 96 * 3600 * 1000).toISOString()
-    }
-  ];
-  localStorage.setItem(LOCAL_STORAGE_KEY_EXPENSES, JSON.stringify(seed));
-  return seed;
+  localStorage.setItem(LOCAL_STORAGE_KEY_EXPENSES, JSON.stringify([]));
+  return [];
 }
 
 const LOCAL_STORAGE_KEY_LIQUIDITY = 'saveahorro_liquidity_v1';
@@ -819,11 +742,11 @@ export const getLiquidityData = () => {
   }
   return {
     accounts: [
-      { id: 'acc_1', name: 'Cuenta Principal (Sueldo / Día a día)', bank: 'BCP', currency: 'PEN', balance: 200, isOperating: true },
-      { id: 'acc_2', name: 'Ahorro Reserva Soles', bank: 'BBVA', currency: 'PEN', balance: 3400, isOperating: false },
-      { id: 'acc_3', name: 'Ahorro Reserva Dólares', bank: 'Interbank', currency: 'USD', balance: 2000, isOperating: false }
+      { id: 'acc_1', name: 'Cuenta Principal (Sueldo / Día a día)', bank: 'BCP', currency: 'PEN', balance: 0, isOperating: true },
+      { id: 'acc_2', name: 'Ahorro Reserva Soles', bank: 'BBVA', currency: 'PEN', balance: 0, isOperating: false },
+      { id: 'acc_3', name: 'Ahorro Reserva Dólares', bank: 'Interbank', currency: 'USD', balance: 0, isOperating: false }
     ],
-    expectedSalary: 2500,
+    expectedSalary: 0,
     creditCardInitialDebt: 0
   };
 };

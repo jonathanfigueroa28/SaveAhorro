@@ -121,6 +121,15 @@ export default function App() {
     const budget = getMonthlyBudget();
     setMonthlyBudgetState(budget);
 
+    // Si el usuario aún tiene en caché las cuentas con saldos ficticios antiguos, reiniciamos en cero
+    if (!localStorage.getItem('saveahorro_zero_defaults_v1')) {
+      localStorage.removeItem('saveahorro_accounts_v2');
+      localStorage.removeItem('saveahorro_incomes_v2');
+      localStorage.removeItem('saveahorro_fixed_expenses_v2');
+      localStorage.removeItem('control_ahorro_expenses_v1');
+      localStorage.setItem('saveahorro_zero_defaults_v1', 'true');
+    }
+
     const [loadedExpenses, loadedAccounts, loadedIncomes, loadedFixed] = await Promise.all([
       fetchExpenses(),
       fetchAccounts(),
@@ -317,11 +326,12 @@ export default function App() {
                 fontWeight: 800,
                 textTransform: 'uppercase',
                 letterSpacing: '0.5px',
-                padding: '0.2rem 0.55rem',
+                padding: '0.25rem 0.65rem',
                 borderRadius: 'var(--radius-sm)',
-                background: 'rgba(245, 158, 11, 0.2)',
-                color: '#fef08a',
-                border: '1px solid rgba(245, 158, 11, 0.4)'
+                background: '#fef3c7',
+                color: '#92400e',
+                border: '1px solid #fde68a',
+                boxShadow: '0 1px 2px rgba(180, 83, 9, 0.08)'
               }}>
                 🎭 MODO DEMO INTERACTIVO
               </span>
@@ -384,12 +394,15 @@ export default function App() {
           </div>
 
           {/* Subtitle tag explaining the active persona */}
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <span>Viendo a:</span>
-            <strong style={{ color: demoProfileKey === 'carlos' ? '#10b981' : '#fca5a5' }}>
-              {activeDemoProfile.fullName} ({activeDemoProfile.nickname}) {activeDemoProfile.emoji}
+          <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+            <span style={{ background: '#e2e8f0', color: '#1e293b', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 700, fontSize: '0.72rem' }}>
+              Mismo Sueldo (S/ 3,500)
+            </span>
+            <span>— Viendo a:</span>
+            <strong style={{ color: demoProfileKey === 'carlos' ? '#059669' : '#dc2626' }}>
+              {activeDemoProfile.fullName} ({activeDemoProfile.nickname})
             </strong>
-            <span>— {activeDemoProfile.tagline}</span>
+            <span style={{ color: 'var(--text-main)' }}>— {activeDemoProfile.tagline}</span>
           </div>
         </div>
       )}
@@ -408,7 +421,7 @@ export default function App() {
         userProfile={currentDisplayedProfile}
         onOpenProfileModal={() => !isDemo && setIsProfileModalOpen(true)}
         onOpenTutorial={() => setIsTourOpen(true)}
-        onShowLanding={() => setViewMode('landing')}
+        onShowLanding={null}
         onLogout={handleLogout}
       />
 
