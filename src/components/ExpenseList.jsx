@@ -59,9 +59,27 @@ export default function ExpenseList({
     }
   };
 
+  // Sanitización y desenvolvimiento defensivo de gastos
+  const cleanExpenses = useMemo(() => {
+    if (!Array.isArray(expenses)) return [];
+    return expenses.map(item => {
+      const exp = item && item.expense ? item.expense : item;
+      if (!exp) return null;
+      const rawDate = exp.date ? new Date(exp.date) : new Date();
+      const validDate = (rawDate instanceof Date && !isNaN(rawDate.getTime())) 
+        ? rawDate.toISOString() 
+        : new Date().toISOString();
+      return {
+        ...exp,
+        amount: parseFloat(exp.amount) || 0,
+        date: validDate
+      };
+    }).filter(Boolean);
+  }, [expenses]);
+
   // Filtered Expenses
   const filteredExpenses = useMemo(() => {
-    return expenses.filter(exp => {
+    return cleanExpenses.filter(exp => {
       // Search term filter (includes description, category, bank, place, payment_method)
       const term = searchTerm.toLowerCase();
       const descMatch = (exp.description || '').toLowerCase().includes(term);
@@ -83,7 +101,7 @@ export default function ExpenseList({
 
       return matchesSearch && matchesCategory && matchesCurrency && matchesAnt;
     });
-  }, [expenses, searchTerm, selectedCategory, selectedCurrency, onlyAnt]);
+  }, [cleanExpenses, searchTerm, selectedCategory, selectedCurrency, onlyAnt]);
 
   // Overall totals of filtered expenses
   const { totalFilteredPEN, totalFilteredUSD, totalFilteredUnified } = useMemo(() => {
@@ -107,7 +125,11 @@ export default function ExpenseList({
   // Grouping logic (Semanas, Meses, Años o Todos)
   const groupedData = useMemo(() => {
     // Sort all expenses newest to oldest
-    const sorted = [...filteredExpenses].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const sorted = [...filteredExpenses].sort((a, b) => {
+      const timeA = new Date(a.date).getTime();
+      const timeB = new Date(b.date).getTime();
+      return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
+    });
 
     if (groupBy === 'none') {
       const pen = sorted.filter(e => (e.currency || 'PEN') === 'PEN').reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
@@ -124,12 +146,13 @@ export default function ExpenseList({
     const groups = {};
 
     sorted.forEach(exp => {
-      const d = new Date(exp.date);
+      const rawD = new Date(exp.date);
+      const d = (rawD instanceof Date && !isNaN(rawD.getTime())) ? rawD : new Date();
       let groupKey = '';
       let groupTitle = '';
 
       if (groupBy === 'year') {
-        groupKey = formatLimaDate(d, { year: 'numeric' });
+        groupKey = formatLimaDate(d, { year: 'numeric' }) || String(d.getFullYear());
         groupTitle = `Año ${groupKey}`;
       } else if (groupBy === 'week') {
         // Compute Monday of current week in Lima time
@@ -138,13 +161,15 @@ export default function ExpenseList({
         const monday = new Date(d.getTime() - diffToMonday * 24 * 3600 * 1000);
         const sunday = new Date(monday.getTime() + 6 * 24 * 3600 * 1000);
         
-        groupKey = monday.toISOString().slice(0, 10);
-        groupTitle = `Semana: ${formatLimaDate(monday, { day: '2-digit', month: 'short' })} - ${formatLimaDate(sunday, { day: '2-digit', month: 'short', year: 'numeric' })}`;
+        groupKey = !isNaN(monday.getTime()) ? monday.toISOString().slice(0, 10) : 'semana';
+        const startStr = formatLimaDate(monday, { day: '2-digit', month: 'short' });
+        const endStr = formatLimaDate(sunday, { day: '2-digit', month: 'short', year: 'numeric' });
+        groupTitle = `Semana: ${startStr} - ${endStr}`;
       } else {
         // 'month' by default
-        groupKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        groupKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         const monthName = formatLimaDate(d, { month: 'long', year: 'numeric' });
-        groupTitle = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+        groupTitle = monthName ? (monthName.charAt(0).toUpperCase() + monthName.slice(1)) : groupKey;
       }
 
       if (!groups[groupKey]) {

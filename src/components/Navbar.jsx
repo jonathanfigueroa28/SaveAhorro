@@ -145,26 +145,37 @@ export default function Navbar({
               </button>
             )}
 
-            {/* Cloud config button */}
+            {/* Cloud Status Indicator (Discreto: verde si conectado, gris si local) */}
             <button
               onClick={onOpenCloudConfig}
-              className="btn btn-secondary"
               style={{
-                padding: '0.45rem 0.75rem',
-                fontSize: '0.78rem',
-                borderColor: cloudEnabled ? 'var(--success)' : 'var(--border-color)',
-                flexShrink: 0
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                background: cloudEnabled ? 'rgba(16, 185, 129, 0.08)' : '#f1f5f9',
+                border: `1px solid ${cloudEnabled ? '#6ee7b7' : 'var(--border-color)'}`,
+                padding: '0.3rem 0.6rem',
+                borderRadius: 'var(--radius-full)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                color: cloudEnabled ? '#059669' : 'var(--text-muted)'
               }}
-              title="Configurar conexión con Supabase"
+              title={cloudEnabled ? 'Nube Conectada (Supabase activo) - Clic para ajustar' : 'Modo Local Autónomo - Clic para conectar Nube'}
+              aria-label="Estado de conexión en la nube"
             >
+              <span style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                background: cloudEnabled ? '#10b981' : '#94a3b8',
+                boxShadow: cloudEnabled ? '0 0 6px #10b981' : 'none',
+                display: 'inline-block'
+              }} />
               {cloudEnabled ? (
-                <Cloud size={16} color="var(--success)" />
+                <Cloud size={14} color="#059669" />
               ) : (
-                <CloudOff size={16} color="var(--text-muted)" />
+                <CloudOff size={14} color="#94a3b8" />
               )}
-              <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>
-                Nube
-              </span>
             </button>
           </div>
         </div>

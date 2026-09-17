@@ -190,9 +190,10 @@ export default function App() {
       return;
     }
 
-    const saved = await saveExpense(expenseData);
-    if (saved) {
-      setExpenses(prev => [saved, ...prev]);
+    const result = await saveExpense(expenseData);
+    const saved = result?.expense || result;
+    if (saved && (saved.amount !== undefined || saved.id)) {
+      setExpenses(prev => [saved, ...prev.filter(e => e && e.id !== saved.id)]);
     }
   };
 
@@ -202,8 +203,9 @@ export default function App() {
       return;
     }
 
-    await updateExpense(id, updatedData);
-    setExpenses(prev => prev.map(e => (e.id === id ? { ...e, ...updatedData } : e)));
+    const result = await updateExpense(id, updatedData);
+    const updated = result?.expense || updatedData;
+    setExpenses(prev => prev.map(e => (e.id === id ? { ...e, ...updated } : e)));
   };
 
   const handleDeleteExpense = async (id) => {
@@ -519,14 +521,6 @@ export default function App() {
         >
           <ListFilter size={20} />
           <span>Historial</span>
-        </button>
-        <button
-          className="mobile-nav-item"
-          onClick={() => setIsCloudConfigOpen(true)}
-          style={{ color: cloudEnabled ? 'var(--success)' : 'var(--text-muted)' }}
-        >
-          <Cloud size={20} />
-          <span>Nube</span>
         </button>
       </nav>
 

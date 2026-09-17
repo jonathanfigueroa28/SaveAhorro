@@ -302,7 +302,7 @@ export default function LiquidityManager({
     <div className="animate-fade-in" style={{ width: '100%', maxWidth: '1000px', margin: '0 auto' }}>
       
       {/* 3 HERO METRICS CARDS (Top Priority View - Pastel & High Contrast) */}
-      <div id="tour-liquidity-heroes" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+      <div id="tour-liquidity-heroes" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
         
         {/* HERO 1: Dinero Disponible Hoy */}
         <div className="card" style={{

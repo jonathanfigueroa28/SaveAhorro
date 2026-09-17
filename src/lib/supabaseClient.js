@@ -41,14 +41,38 @@ export const getLimaNowIso = () => {
   return formatter.format(now).replace(' ', 'T').slice(0, 16);
 };
 
-// Formatear cualquier fecha ISO en zona horaria Lima (UTC-5)
+// Generador de UUID compatible con PostgreSQL y navegadores
+export const isValidUUID = (str) => {
+  return typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+};
+
+export const generateUUID = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    try {
+      return crypto.randomUUID();
+    } catch (e) {}
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+};
+
+// Formatear cualquier fecha ISO en zona horaria Lima (UTC-5) de forma segura contra RangeError
 export const formatLimaDate = (dateVal, options = {}) => {
   if (!dateVal) return '';
-  const date = typeof dateVal === 'string' ? new Date(dateVal) : dateVal;
-  return new Intl.DateTimeFormat('es-PE', {
-    timeZone: 'America/Lima',
-    ...options
-  }).format(date);
+  try {
+    const date = typeof dateVal === 'string' ? new Date(dateVal) : dateVal;
+    if (!(date instanceof Date) || isNaN(date.getTime())) {
+      return '';
+    }
+    return new Intl.DateTimeFormat('es-PE', {
+      timeZone: 'America/Lima',
+      ...options
+    }).format(date);
+  } catch (e) {
+    return '';
+  }
 };
 
 // Presets de gastos hormiga peruanos y rápidos
@@ -557,87 +581,121 @@ export const fetchExpenses = async () => {
         .select('*')
         .order('date', { ascending: false });
 
-      if (user?.id) {
+      if (isValidUUID(user?.id)) {
         query = query.eq('user_id', user.id);
       }
         
       const { data, error } = await query;
-      if (!error && data) {
+      if (!error && data && Array.isArray(data)) {
         localStorage.setItem(LOCAL_STORAGE_KEY_EXPENSES, JSON.stringify(data));
         return data;
-      } else {
-        console.warn('Supabase fetch error, falling back to local storage:', error?.message);
+      } else if (error) {
+        console.warn('Supabase fetch notice, using local storage:', error.message);
       }
     } catch (err) {
-      console.warn('Supabase request failed:', err);
+      console.warn('Supabase request failed, using local storage:', err);
     }
   }
 
-  // Fallback to local storage
+  // Fallback to local storage with unwrap defense
   const stored = localStorage.getItem(LOCAL_STORAGE_KEY_EXPENSES);
   if (stored) {
     try {
-      return JSON.parse(stored);
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        return parsed.map(item => (item && item.expense ? { ...item.expense } : item));
+      }
+      return [];
     } catch (e) {
       return [];
     }
   }
-  return getInitialSeedData();
+  return [];
 };
 
 export const saveExpense = async (expense) => {
   const currentCurrency = expense.currency || getPreferredCurrency() || 'PEN';
   const user = await getCurrentUser();
+  
+  // Garantizar que el ID sea siempre un UUID válido para PostgreSQL
+  const expenseId = (expense.id && (isValidUUID(expense.id) || !expense.id.startsWith('exp_')))
+    ? expense.id
+    : generateUUID();
+
+  // Garantizar que date sea una fecha ISO válida
+  const rawDate = expense.date ? new Date(expense.date) : new Date();
+  const validDateIso = (rawDate instanceof Date && !isNaN(rawDate.getTime()))
+    ? rawDate.toISOString()
+    : new Date().toISOString();
+
   const newExpense = {
-    id: expense.id || 'exp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-    amount: parseFloat(expense.amount),
+    id: expenseId,
+    amount: parseFloat(expense.amount) || 0,
     currency: currentCurrency,
-    category: expense.category,
+    category: expense.category || 'gastos-hormiga',
     description: expense.description || '',
     is_ant_expense: Boolean(expense.is_ant_expense),
     payment_method: expense.payment_method || null,
     account_id: expense.account_id || null,
     bank: expense.bank || null,
     place: expense.place || null,
-    user_id: user?.id || null,
-    date: expense.date || new Date().toISOString(),
+    user_id: isValidUUID(user?.id) ? user.id : null,
+    date: validDateIso,
     created_at: expense.created_at || new Date().toISOString()
   };
 
-  // Local storage save first
+  // Local storage save first (garantiza persistencia inmediata local)
   const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_EXPENSES);
-  let existing = existingStr ? JSON.parse(existingStr) : getInitialSeedData();
-  existing = [newExpense, ...existing.filter(e => e.id !== newExpense.id)];
+  let existing = [];
+  try {
+    existing = existingStr ? JSON.parse(existingStr) : [];
+  } catch (e) {
+    existing = [];
+  }
+  // Desenvolver cualquier objeto malformado previo
+  existing = existing.map(item => (item && item.expense ? { ...item.expense } : item));
+  existing = [newExpense, ...existing.filter(e => e && e.id !== newExpense.id)];
   localStorage.setItem(LOCAL_STORAGE_KEY_EXPENSES, JSON.stringify(existing));
 
   let cloudError = null;
-  // Sync to Supabase if available
+  // Sincronizar a Supabase si está disponible
   const client = getSupabaseClient();
   if (client) {
     try {
-      // Intentar guardar con todas las columnas
-      let { error } = await client.from('expenses').upsert([newExpense]);
-      // Si faltan columnas nuevas en la tabla de Supabase (código PGRST204), reintentar con columnas base
-      if (error && (error.code === 'PGRST204' || error.message?.includes('column'))) {
+      // Si user_id no es un UUID real de auth.users, se omite para evitar error 400 (violación de clave foránea)
+      const payload = { ...newExpense };
+      if (!isValidUUID(payload.user_id)) {
+        delete payload.user_id;
+      }
+      
+      let { error } = await client.from('expenses').upsert([payload]);
+      
+      // Si faltan columnas personalizadas en la tabla del usuario, reintentar con las columnas estándar
+      if (error) {
         const basePayload = {
           id: newExpense.id,
           amount: newExpense.amount,
           category: newExpense.category,
           description: newExpense.description,
-          is_ant_expense: newExpense.is_ant_expense,
           date: newExpense.date,
           created_at: newExpense.created_at
         };
+        if (isValidUUID(newExpense.user_id)) {
+          basePayload.user_id = newExpense.user_id;
+        }
+        if (newExpense.currency) {
+          basePayload.currency = newExpense.currency;
+        }
         const retry = await client.from('expenses').upsert([basePayload]);
         error = retry.error;
       }
 
       if (error) {
-        console.error('Supabase save error:', error);
+        console.warn('Supabase save notice (guardado seguro en almacenamiento local):', error.message || error);
         cloudError = error.message;
       }
     } catch (err) {
-      console.error('Supabase exception during save:', err);
+      console.warn('Supabase exception (guardado seguro en almacenamiento local):', err.message || err);
       cloudError = err.message;
     }
   }
@@ -647,10 +705,16 @@ export const saveExpense = async (expense) => {
 
 export const updateExpense = async (id, updatedFields) => {
   const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_EXPENSES);
-  let existing = existingStr ? JSON.parse(existingStr) : [];
+  let existing = [];
+  try {
+    existing = existingStr ? JSON.parse(existingStr) : [];
+  } catch (e) {
+    existing = [];
+  }
   let updatedExpense = null;
 
-  existing = existing.map(item => {
+  existing = existing.map(rawItem => {
+    const item = rawItem && rawItem.expense ? { ...rawItem.expense } : rawItem;
     if (item.id === id) {
       updatedExpense = { ...item, ...updatedFields };
       return updatedExpense;
@@ -664,26 +728,32 @@ export const updateExpense = async (id, updatedFields) => {
   const client = getSupabaseClient();
   if (client && updatedExpense) {
     try {
-      let { error } = await client.from('expenses').upsert([updatedExpense]);
-      if (error && (error.code === 'PGRST204' || error.message?.includes('column'))) {
+      const payload = { ...updatedExpense };
+      if (!isValidUUID(payload.user_id)) {
+        delete payload.user_id;
+      }
+      let { error } = await client.from('expenses').upsert([payload]);
+      if (error) {
         const basePayload = {
           id: updatedExpense.id,
           amount: updatedExpense.amount,
           category: updatedExpense.category,
           description: updatedExpense.description,
-          is_ant_expense: updatedExpense.is_ant_expense,
           date: updatedExpense.date,
           created_at: updatedExpense.created_at
         };
+        if (isValidUUID(updatedExpense.user_id)) {
+          basePayload.user_id = updatedExpense.user_id;
+        }
         const retry = await client.from('expenses').upsert([basePayload]);
         error = retry.error;
       }
       if (error) {
-        console.error('Supabase update error:', error);
+        console.warn('Supabase update notice:', error.message || error);
         cloudError = error.message;
       }
     } catch (err) {
-      console.error('Supabase update exception:', err);
+      console.warn('Supabase update exception:', err.message || err);
       cloudError = err.message;
     }
   }
