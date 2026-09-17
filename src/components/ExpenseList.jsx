@@ -210,13 +210,13 @@ export default function ExpenseList({
       <span style={{
         display: 'inline-flex',
         alignItems: 'center',
-        padding: '0.15rem 0.45rem',
+        padding: '0.15rem 0.5rem',
         borderRadius: 'var(--radius-sm)',
-        fontSize: '0.7rem',
+        fontSize: '0.72rem',
         fontWeight: 600,
-        background: 'rgba(255, 255, 255, 0.08)',
-        color: '#e2e8f0',
-        border: '1px solid var(--border-color)',
+        background: '#f1f5f9',
+        color: '#1e293b',
+        border: '1px solid #cbd5e1',
         whiteSpace: 'nowrap'
       }}>
         {pm.name}
@@ -433,7 +433,7 @@ export default function ExpenseList({
                 gap: '0.5rem'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#fff' }}>
+                  <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-main)' }}>
                     {group.title}
                   </span>
                   <span className="badge badge-regular" style={{ fontSize: '0.7rem' }}>
@@ -501,26 +501,39 @@ export default function ExpenseList({
 
                           {/* Description & Category Column */}
                           <td style={{ padding: '0.75rem 1rem' }}>
-                            <div style={{ fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            <div style={{ fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
                               <span>{exp.description || catInfo.name}</span>
                               {isAnt && (
-                                <span className="badge badge-ant" style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}>
+                                <span style={{
+                                  fontSize: '0.68rem',
+                                  fontWeight: 700,
+                                  color: '#92400e',
+                                  background: '#fef3c7',
+                                  border: '1px solid #fde68a',
+                                  padding: '0.1rem 0.4rem',
+                                  borderRadius: '4px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '2px'
+                                }}>
                                   🐜 Hormiga
                                 </span>
                               )}
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
                               <span style={{
-                                fontSize: '0.7rem',
-                                color: catInfo.color,
-                                background: `${catInfo.color}15`,
-                                padding: '0.1rem 0.4rem',
+                                fontSize: '0.72rem',
+                                fontWeight: 600,
+                                color: isAnt ? '#92400e' : '#334155',
+                                background: isAnt ? '#fef3c7' : '#f1f5f9',
+                                border: `1px solid ${isAnt ? '#fde68a' : '#e2e8f0'}`,
+                                padding: '0.12rem 0.45rem',
                                 borderRadius: '4px'
                               }}>
                                 {catInfo.name}
                               </span>
                               {exp.place && (
-                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
                                   <MapPin size={11} /> {exp.place}
                                 </span>
                               )}
@@ -534,7 +547,7 @@ export default function ExpenseList({
                                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>—</span>
                               )}
                               {exp.bank && (
-                                <span style={{ fontSize: '0.7rem', color: '#93c5fd', background: 'rgba(59, 130, 246, 0.15)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
+                                <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#1d4ed8', background: '#dbeafe', border: '1px solid #bfdbfe', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
                                   {exp.bank}
                                 </span>
                               )}
@@ -543,11 +556,15 @@ export default function ExpenseList({
 
                           {/* Amount Column */}
                           <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: '700', whiteSpace: 'nowrap' }}>
-                            <div style={{ fontSize: '0.98rem', color: isAnt ? '#fef08a' : '#fff' }}>
+                            <div style={{
+                              fontSize: '1rem',
+                              fontWeight: 800,
+                              color: exp.currency === 'USD' ? '#047857' : (isAnt ? '#b45309' : 'var(--text-main)')
+                            }}>
                               {formatMoney(exp.amount, exp.currency || 'PEN')}
                             </div>
                             {unifyToSoles && exp.currency === 'USD' && (
-                              <div style={{ fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 600, marginTop: '2px' }}>
+                              <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: 600, marginTop: '2px' }}>
                                 ~S/ {(parseFloat(exp.amount) * exchangeRate).toFixed(2)}
                               </div>
                             )}
@@ -603,7 +620,7 @@ export default function ExpenseList({
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(5, 8, 15, 0.85)',
+          backgroundColor: 'rgba(15, 23, 42, 0.45)',
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
           display: 'flex',
@@ -612,7 +629,7 @@ export default function ExpenseList({
           zIndex: 1000,
           padding: '1rem'
         }}>
-          <div className="glass-card animate-fade-in" style={{
+          <div className="animate-fade-in" style={{
             width: '100%',
             maxWidth: '520px',
             maxHeight: '92vh',
@@ -620,8 +637,10 @@ export default function ExpenseList({
             flexDirection: 'column',
             overflow: 'hidden',
             padding: 0,
-            border: '1px solid rgba(255, 255, 255, 0.15)',
-            boxShadow: '0 16px 40px rgba(0, 0, 0, 0.6)'
+            background: '#ffffff',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border-color)',
+            boxShadow: '0 20px 40px rgba(15, 23, 42, 0.15)'
           }}>
             
             {/* Encabezado Fijo del Modal */}
@@ -631,10 +650,10 @@ export default function ExpenseList({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              background: 'rgba(255, 255, 255, 0.03)',
+              background: '#f8fafc',
               flexShrink: 0
             }}>
-              <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '0.45rem', margin: 0 }}>
+              <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '0.45rem', margin: 0, color: 'var(--text-main)' }}>
                 <Edit3 size={18} color="var(--primary)" />
                 <span>Editar Gasto</span>
               </h3>
@@ -642,7 +661,7 @@ export default function ExpenseList({
                 type="button"
                 onClick={() => setEditingExpense(null)}
                 style={{
-                  background: 'rgba(255,255,255,0.06)',
+                  background: '#ffffff',
                   border: '1px solid var(--border-color)',
                   color: 'var(--text-muted)',
                   borderRadius: '50%',
@@ -855,7 +874,7 @@ export default function ExpenseList({
               <div style={{
                 padding: '0.85rem 1.25rem',
                 borderTop: '1px solid var(--border-color)',
-                background: 'rgba(11, 15, 25, 0.95)',
+                background: '#f8fafc',
                 display: 'flex',
                 justifyContent: 'flex-end',
                 gap: '0.65rem',
@@ -884,7 +903,7 @@ export default function ExpenseList({
         </div>
       )}
 
-      {/* MODAL PERSONALIZADO DE CONFIRMACIÓN DE ELIMINACIÓN (SIN ALERTAS NATIVAS DEL NAVEGADOR) */}
+      {/* MODAL PERSONALIZADO DE CONFIRMACIÓN DE ELIMINACIÓN */}
       {expenseToDelete && (
         <div style={{
           position: 'fixed',
@@ -892,7 +911,7 @@ export default function ExpenseList({
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(5, 8, 15, 0.85)',
+          backgroundColor: 'rgba(15, 23, 42, 0.45)',
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
           display: 'flex',
@@ -901,13 +920,15 @@ export default function ExpenseList({
           zIndex: 1100,
           padding: '1rem'
         }}>
-          <div className="glass-card animate-fade-in" style={{
+          <div className="animate-fade-in" style={{
             width: '100%',
             maxWidth: '450px',
             padding: '1.5rem',
             position: 'relative',
+            background: '#ffffff',
+            borderRadius: 'var(--radius-lg)',
             border: '1px solid rgba(239, 68, 68, 0.35)',
-            boxShadow: '0 16px 40px rgba(0, 0, 0, 0.65)'
+            boxShadow: '0 20px 40px rgba(15, 23, 42, 0.2)'
           }}>
             <button
               onClick={() => setExpenseToDelete(null)}

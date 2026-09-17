@@ -121,13 +121,13 @@ export default function App() {
     const budget = getMonthlyBudget();
     setMonthlyBudgetState(budget);
 
-    // Si el usuario aún tiene en caché las cuentas con saldos ficticios antiguos, reiniciamos en cero
-    if (!localStorage.getItem('saveahorro_zero_defaults_v1')) {
+    // Si el usuario aún tiene en caché gastos o cuentas antiguas de prueba, reiniciamos en cero
+    if (!localStorage.getItem('saveahorro_zero_defaults_v2')) {
       localStorage.removeItem('saveahorro_accounts_v2');
       localStorage.removeItem('saveahorro_incomes_v2');
       localStorage.removeItem('saveahorro_fixed_expenses_v2');
       localStorage.removeItem('control_ahorro_expenses_v1');
-      localStorage.setItem('saveahorro_zero_defaults_v1', 'true');
+      localStorage.setItem('saveahorro_zero_defaults_v2', 'true');
     }
 
     const [loadedExpenses, loadedAccounts, loadedIncomes, loadedFixed] = await Promise.all([
@@ -181,30 +181,29 @@ export default function App() {
   // Expense Handlers (Dispatches to real state or demo state)
   const handleAddExpense = async (expenseData) => {
     if (viewMode === 'demo') {
-      const newDemoExpense = {
+      const newExp = {
         ...expenseData,
-        id: 'demo_exp_' + Date.now()
+        id: 'demo_exp_' + Date.now(),
+        date: expenseData.date || new Date().toISOString()
       };
-      setDemoExpenses(prev => [newDemoExpense, ...prev]);
-      return { expense: newDemoExpense, isCloudEnabled: false };
+      setDemoExpenses(prev => [newExp, ...prev]);
+      return;
     }
 
-    const result = await saveExpense(expenseData);
-    const saved = result.expense || result;
-    setExpenses(prev => [saved, ...prev.filter(e => e.id !== saved.id)]);
-    return result;
+    const saved = await saveExpense(expenseData);
+    if (saved) {
+      setExpenses(prev => [saved, ...prev]);
+    }
   };
 
-  const handleUpdateExpense = async (id, updatedFields) => {
+  const handleUpdateExpense = async (id, updatedData) => {
     if (viewMode === 'demo') {
-      setDemoExpenses(prev => prev.map(e => e.id === id ? { ...e, ...updatedFields } : e));
-      return { expense: { id, ...updatedFields } };
+      setDemoExpenses(prev => prev.map(e => (e.id === id ? { ...e, ...updatedData } : e)));
+      return;
     }
 
-    const result = await updateExpense(id, updatedFields);
-    const updated = result.expense || { id, ...updatedFields };
-    setExpenses(prev => prev.map(e => (e.id === id ? { ...e, ...updated } : e)));
-    return result;
+    await updateExpense(id, updatedData);
+    setExpenses(prev => prev.map(e => (e.id === id ? { ...e, ...updatedData } : e)));
   };
 
   const handleDeleteExpense = async (id) => {
@@ -239,6 +238,8 @@ export default function App() {
     localStorage.setItem('saveahorro_active_user', JSON.stringify(user));
     localStorage.setItem('saveahorro_view_mode', 'app');
     setViewMode('app');
+    setActiveTab('form');
+    setIsTourOpen(true); // Guiar inmediatamente con el tutorial interactivo
     setIsAuthModalOpen(false);
     loadData();
   };
@@ -247,6 +248,10 @@ export default function App() {
     if (currentUser) {
       setViewMode('app');
       localStorage.setItem('saveahorro_view_mode', 'app');
+      if (!localStorage.getItem('saveahorro_has_seen_tour')) {
+        setActiveTab('form');
+        setIsTourOpen(true);
+      }
     } else {
       setIsAuthModalOpen(true);
     }

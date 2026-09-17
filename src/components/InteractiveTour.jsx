@@ -38,7 +38,7 @@ export default function InteractiveTour({
       title: 'Liquidez Real y Ahorros de Reserva',
       badge: 'Paso 2 de 4 • Cuentas & Ahorro',
       icon: <Wallet size={20} color="#059669" />,
-      highlightTab: 'accounts',
+      highlightTab: 'liquidity',
       targetId: 'tour-liquidity-heroes',
       description: 'Conoce tu dinero disponible en mano hoy, tus ahorros protegidos intocables y la liquidez que te sobrará el próximo mes descontando gastos fijos y tarjeta.',
       actionHint: 'Tus gastos diarios se descuentan en tiempo real de tus cuentas operativas.'
@@ -56,7 +56,7 @@ export default function InteractiveTour({
       title: 'Historial y Auditoría de Gastos',
       badge: 'Paso 4 de 4 • Historial',
       icon: <CreditCard size={20} color="#475569" />,
-      highlightTab: 'history',
+      highlightTab: 'list',
       targetId: 'tour-history-controls',
       description: 'Revisa cada movimiento registrado, filtra por fecha, cuenta o moneda, y edita o elimina fácilmente cualquier registro erróneo.',
       actionHint: 'Puedes exportar tus registros a Excel/CSV con un solo clic.'
@@ -69,20 +69,24 @@ export default function InteractiveTour({
   useEffect(() => {
     if (!isOpen) return;
 
+    // Clear stale target rect when changing steps
+    setTargetRect(null);
+
     // Navigate to required tab if not already on it
     if (step.highlightTab && activeTab !== step.highlightTab && onNavigateTab) {
       onNavigateTab(step.highlightTab);
     }
 
     let retryTimer = null;
-    const updatePosition = () => {
+    let frameId = null;
+
+    const measureAndHighlight = () => {
       const el = document.getElementById(step.targetId);
       if (el) {
-        // Scroll element smoothly into the viewport center
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Immediate scroll to avoid animation timing mismatch
+        el.scrollIntoView({ behavior: 'auto', block: 'center' });
         
-        // Wait briefly for smooth scroll animation to settle
-        setTimeout(() => {
+        frameId = requestAnimationFrame(() => {
           const rect = el.getBoundingClientRect();
           setTargetRect({
             top: rect.top,
@@ -92,15 +96,15 @@ export default function InteractiveTour({
             bottom: rect.bottom,
             right: rect.right
           });
-        }, 120);
+        });
       } else {
         // Retry shortly if view is still mounting
-        retryTimer = setTimeout(updatePosition, 100);
+        retryTimer = setTimeout(measureAndHighlight, 80);
       }
     };
 
     // Initial update with small grace period for tab mount
-    const timer = setTimeout(updatePosition, 140);
+    const timer = setTimeout(measureAndHighlight, 100);
 
     const handleScrollOrResize = () => {
       const el = document.getElementById(step.targetId);
@@ -123,6 +127,7 @@ export default function InteractiveTour({
     return () => {
       clearTimeout(timer);
       if (retryTimer) clearTimeout(retryTimer);
+      if (frameId) cancelAnimationFrame(frameId);
       window.removeEventListener('resize', handleScrollOrResize);
       window.removeEventListener('scroll', handleScrollOrResize);
     };
@@ -133,11 +138,13 @@ export default function InteractiveTour({
   const handleNext = () => {
     if (currentStep < tourSteps.length - 1) {
       const next = currentStep + 1;
+      setTargetRect(null);
       setCurrentStep(next);
       if (tourSteps[next].highlightTab && onNavigateTab) {
         onNavigateTab(tourSteps[next].highlightTab);
       }
     } else {
+      localStorage.setItem('saveahorro_has_seen_tour', 'true');
       onClose();
     }
   };
@@ -145,6 +152,7 @@ export default function InteractiveTour({
   const handlePrev = () => {
     if (currentStep > 0) {
       const prev = currentStep - 1;
+      setTargetRect(null);
       setCurrentStep(prev);
       if (tourSteps[prev].highlightTab && onNavigateTab) {
         onNavigateTab(tourSteps[prev].highlightTab);
