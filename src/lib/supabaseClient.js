@@ -394,7 +394,9 @@ export const saveAccount = async (account) => {
 
   if (client && user) {
     try {
-      await client.from('accounts').upsert([itemToSave]);
+      const payload = { ...itemToSave };
+      if (!isValidUUID(payload.user_id)) delete payload.user_id;
+      await client.from('accounts').upsert([payload]);
     } catch (err) {
       console.warn('Supabase account save error:', err);
     }
@@ -470,7 +472,9 @@ export const saveIncome = async (income) => {
 
   if (client && user) {
     try {
-      await client.from('incomes').upsert([itemToSave]);
+      const payload = { ...itemToSave };
+      if (!isValidUUID(payload.user_id)) delete payload.user_id;
+      await client.from('incomes').upsert([payload]);
     } catch (err) {
       console.warn('Error saving income to Supabase:', err);
     }
@@ -546,7 +550,9 @@ export const saveFixedExpense = async (fixed) => {
 
   if (client && user) {
     try {
-      await client.from('fixed_expenses').upsert([itemToSave]);
+      const payload = { ...itemToSave };
+      if (!isValidUUID(payload.user_id)) delete payload.user_id;
+      await client.from('fixed_expenses').upsert([payload]);
     } catch (err) {
       console.warn('Error saving fixed expense to Supabase:', err);
     }
@@ -639,6 +645,7 @@ export const saveExpense = async (expense) => {
     account_id: expense.account_id || null,
     bank: expense.bank || null,
     place: expense.place || null,
+    is_historical_already_billed: Boolean(expense.is_historical_already_billed),
     user_id: isValidUUID(user?.id) ? user.id : null,
     date: validDateIso,
     created_at: expense.created_at || new Date().toISOString()
@@ -827,5 +834,69 @@ export const saveLiquidityData = (data) => {
   } catch (e) {
     console.error('Error saving liquidity data', e);
   }
+};
+
+// --- TARJETA DE CRÉDITO & DEUDAS FACTURADAS ---
+export const LOCAL_STORAGE_KEY_TC = 'saveahorro_tc_config_v2';
+export const DEFAULT_TC_CONFIG = {
+  name: 'Tarjeta de Crédito Principal',
+  bank: 'BCP',
+  closingDay: 20, // Día de corte
+  dueDay: 5,     // Día de pago
+  billedDebtPEN: 0, // Deuda último estado de cuenta en Soles (a pagar este ciclo)
+  billedDebtUSD: 0, // Deuda último estado de cuenta en Dólares (a pagar este ciclo)
+  paymentAccountPEN: '', // ID cuenta bancaria de pago en Soles
+  paymentAccountUSD: '', // ID cuenta bancaria de pago en Dólares
+  isBilledPaidThisMonth: false // Si ya fue pagada en este ciclo
+};
+
+export const fetchCreditCardConfig = () => {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY_TC);
+    if (raw) {
+      return { ...DEFAULT_TC_CONFIG, ...JSON.parse(raw) };
+    }
+  } catch (e) {
+    console.warn('Error reading TC config:', e);
+  }
+  const legacyBase = parseFloat(localStorage.getItem('saveahorro_tc_base_debt') || '0');
+  const initial = { ...DEFAULT_TC_CONFIG, billedDebtPEN: legacyBase };
+  localStorage.setItem(LOCAL_STORAGE_KEY_TC, JSON.stringify(initial));
+  return initial;
+};
+
+export const saveCreditCardConfig = (config) => {
+  const updated = { ...DEFAULT_TC_CONFIG, ...config };
+  localStorage.setItem(LOCAL_STORAGE_KEY_TC, JSON.stringify(updated));
+  localStorage.setItem('saveahorro_tc_base_debt', (updated.billedDebtPEN || 0).toString());
+  return updated;
+};
+
+// --- PLAN DE AHORRO MENSUAL PROGRAMADO ---
+export const LOCAL_STORAGE_KEY_SAVINGS_GOAL = 'saveahorro_savings_goal_v1';
+export const DEFAULT_SAVINGS_GOAL = {
+  amountPEN: 0,
+  amountUSD: 0,
+  sourceIncomeId: '', // Sueldo / Ingreso origen del ahorro
+  destinationAccountId: '', // Cuenta de reserva / intocable a donde va
+  isTransferredThisMonth: false // Si ya se trasladó a reserva este mes
+};
+
+export const fetchMonthlySavingsGoal = () => {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY_SAVINGS_GOAL);
+    if (raw) {
+      return { ...DEFAULT_SAVINGS_GOAL, ...JSON.parse(raw) };
+    }
+  } catch (e) {
+    console.warn('Error reading savings goal:', e);
+  }
+  return DEFAULT_SAVINGS_GOAL;
+};
+
+export const saveMonthlySavingsGoal = (goal) => {
+  const updated = { ...DEFAULT_SAVINGS_GOAL, ...goal };
+  localStorage.setItem(LOCAL_STORAGE_KEY_SAVINGS_GOAL, JSON.stringify(updated));
+  return updated;
 };
 

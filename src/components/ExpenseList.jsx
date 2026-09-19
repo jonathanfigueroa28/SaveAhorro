@@ -261,6 +261,7 @@ export default function ExpenseList({
       payment_method: editingExpense.payment_method || null,
       bank: editingExpense.bank || null,
       place: editingExpense.place || null,
+      is_historical_already_billed: Boolean(editingExpense.is_historical_already_billed),
       date: new Date(editingExpense.date).toISOString()
     });
     setEditingExpense(null);
@@ -542,6 +543,22 @@ export default function ExpenseList({
                                   gap: '2px'
                                 }}>
                                   🐜 Hormiga
+                                </span>
+                              )}
+                              {exp.is_historical_already_billed && (
+                                <span style={{
+                                  fontSize: '0.68rem',
+                                  fontWeight: 700,
+                                  color: '#475569',
+                                  background: '#f1f5f9',
+                                  border: '1px solid #cbd5e1',
+                                  padding: '0.1rem 0.4rem',
+                                  borderRadius: '4px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '2px'
+                                }}>
+                                  📋 Histórico
                                 </span>
                               )}
                             </div>
@@ -841,11 +858,39 @@ export default function ExpenseList({
                         category: nextChecked ? 'gastos-hormiga' : (editingExpense.category === 'gastos-hormiga' ? 'otros' : editingExpense.category)
                       });
                     }}
-                    style={{ width: '16px', height: '16px', accentColor: '#f59e0b', cursor: 'pointer' }}
+                    style={{ width: '16px', height: '16px', accentColor: '#b45309', cursor: 'pointer' }}
                   />
-                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: editingExpense.is_ant_expense ? '#fef08a' : 'inherit' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: editingExpense.is_ant_expense ? '#b45309' : 'var(--text-main)' }}>
                     Marcar como Gasto Hormiga 🐜
                   </span>
+                </div>
+
+                {/* Opción Gasto Histórico en edición */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.65rem 0.8rem',
+                  background: editingExpense.is_historical_already_billed ? '#f0fdf4' : '#f8fafc',
+                  border: `1px solid ${editingExpense.is_historical_already_billed ? '#86efac' : 'var(--border-color)'}`,
+                  borderRadius: 'var(--radius-sm)',
+                  marginBottom: '1rem',
+                  cursor: 'pointer'
+                }} onClick={() => setEditingExpense({ ...editingExpense, is_historical_already_billed: !editingExpense.is_historical_already_billed })}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(editingExpense.is_historical_already_billed)}
+                    onChange={(e) => setEditingExpense({ ...editingExpense, is_historical_already_billed: e.target.checked })}
+                    style={{ width: '16px', height: '16px', accentColor: '#16a34a', cursor: 'pointer' }}
+                  />
+                  <div>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: editingExpense.is_historical_already_billed ? '#15803d' : 'var(--text-main)', display: 'block' }}>
+                      📋 Gasto histórico (Ya pagado / Ya incluido en estado de cuenta)
+                    </span>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      No se sumará a consumos pendientes de tarjeta ni restará saldo base.
+                    </span>
+                  </div>
                 </div>
 
                 {/* Método de pago */}
@@ -976,12 +1021,12 @@ export default function ExpenseList({
               <X size={15} />
             </button>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.15rem' }}>
               <div style={{
                 width: '42px',
                 height: '42px',
                 borderRadius: '50%',
-                background: 'rgba(239, 68, 68, 0.18)',
+                background: 'rgba(239, 68, 68, 0.12)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -990,27 +1035,26 @@ export default function ExpenseList({
                 <Trash2 size={20} color="var(--danger)" />
               </div>
               <div>
-                <h3 style={{ fontSize: '1.15rem', color: '#fff' }}>¿Eliminar este gasto?</h3>
-                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Esta acción es permanente y no se puede deshacer.</p>
+                <h3 style={{ fontSize: '1.15rem', color: 'var(--text-main)', margin: 0, fontWeight: 800 }}>¿Eliminar este gasto?</h3>
               </div>
             </div>
 
             {/* Expense details summary card */}
             <div style={{
-              background: 'rgba(255, 255, 255, 0.04)',
-              border: '1px solid var(--border-color)',
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
               borderRadius: 'var(--radius-md)',
               padding: '0.9rem 1rem',
               marginBottom: '1.25rem'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#fff' }}>
+                <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-main)' }}>
                   {expenseToDelete.description || getCategoryInfo(expenseToDelete.category).name}
                 </span>
                 <span style={{
                   fontWeight: 800,
                   fontSize: '1.1rem',
-                  color: expenseToDelete.is_ant_expense ? '#fef08a' : '#fff'
+                  color: expenseToDelete.currency === 'USD' ? '#047857' : (expenseToDelete.is_ant_expense ? '#b45309' : '#dc2626')
                 }}>
                   {formatMoney(expenseToDelete.amount, expenseToDelete.currency || 'PEN')}
                 </span>
@@ -1021,6 +1065,7 @@ export default function ExpenseList({
                 {expenseToDelete.payment_method && <span>• 💳 {expenseToDelete.payment_method}</span>}
                 {expenseToDelete.bank && <span>• 🏦 {expenseToDelete.bank}</span>}
                 {expenseToDelete.place && <span>• 📍 {expenseToDelete.place}</span>}
+                {expenseToDelete.is_historical_already_billed && <span>• 📋 Ya facturado previamente</span>}
               </div>
             </div>
 

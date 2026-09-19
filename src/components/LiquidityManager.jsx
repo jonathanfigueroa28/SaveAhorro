@@ -7,7 +7,11 @@ import {
   saveIncome,
   deleteIncome,
   saveFixedExpense,
-  deleteFixedExpense
+  deleteFixedExpense,
+  fetchCreditCardConfig,
+  saveCreditCardConfig,
+  fetchMonthlySavingsGoal,
+  saveMonthlySavingsGoal
 } from '../lib/supabaseClient';
 import {
   Wallet,
@@ -36,7 +40,8 @@ import {
   Briefcase,
   Receipt,
   HelpCircle,
-  Percent
+  Percent,
+  Clock
 } from 'lucide-react';
 import {
   WORK_REGIMES,
@@ -62,11 +67,14 @@ export default function LiquidityManager({
   const [accountModal, setAccountModal] = useState(null);
   const [incomeModal, setIncomeModal] = useState(null);
   const [fixedModal, setFixedModal] = useState(null);
-  const [creditCardBaseDebt, setCreditCardBaseDebt] = useState(() => {
-    return parseFloat(localStorage.getItem('saveahorro_tc_base_debt') || '0');
-  });
-  const [editingTcBase, setEditingTcBase] = useState(false);
-  const [tempTcBase, setTempTcBase] = useState('');
+  
+  // Tarjeta de Crédito y Ahorro Programado State
+  const [tcConfig, setTcConfig] = useState(() => fetchCreditCardConfig());
+  const [tcModal, setTcModal] = useState(null);
+  const [savingsGoal, setSavingsGoal] = useState(() => fetchMonthlySavingsGoal());
+  const [savingsModal, setSavingsModal] = useState(null);
+  const [activeLiquidityView, setActiveLiquidityView] = useState('month1'); // 'month1' (próximo mes) | 'month2' (subsiguiente mes)
+  const [fixedSubTab, setFixedSubTab] = useState('fijos'); // 'fijos' | 'ahorro'
 
   // 1. Current month expenses filter
   const currentMonthExpenses = useMemo(() => {
@@ -85,6 +93,9 @@ export default function LiquidityManager({
       // Calculate expenses debited from this account this month
       const debitedThisMonth = currentMonthExpenses
         .filter(exp => {
+          // Si el gasto fue marcado como histórico / ya facturado en saldo inicial, NO restar
+          if (exp.is_historical_already_billed) return false;
+
           // If explicitly tagged with account_id
           if (exp.account_id) return exp.account_id === acc.id;
           
@@ -170,21 +181,77 @@ export default function LiquidityManager({
     };
   }, [fixedExpenses, exchangeRate]);
 
-  // 6. Credit Card Debts calculation
-  const creditCardExpensesThisMonth = useMemo(() => {
-    return currentMonthExpenses
-      .filter(exp => exp.payment_method === 'credito')
-      .reduce((sum, exp) => {
+  // 6. Tarjeta de Crédito: Compras del Ciclo Actual en Curso (Lo que gastas HOY y vence el mes subsiguiente)
+  const creditCardNewPurchases = useMemo(() => {
+    let pen = 0;
+    let usd = 0;
+    const purchasesList = [];
+
+    currentMonthExpenses
+      .filter(exp => exp.payment_method === 'credito' && !exp.is_historical_already_billed)
+      .forEach(exp => {
         const amt = parseFloat(exp.amount) || 0;
-        return sum + (exp.currency === 'USD' ? amt * exchangeRate : amt);
-      }, 0);
+        if (exp.currency === 'USD') usd += amt;
+        else pen += amt;
+        purchasesList.push(exp);
+      });
+
+    return {
+      purchasesPEN: pen,
+      purchasesUSD: usd,
+      totalPurchasesInPEN: pen + (usd * exchangeRate),
+      purchasesList
+    };
   }, [currentMonthExpenses, exchangeRate]);
 
-  const totalCreditCardBillNextMonth = creditCardBaseDebt + creditCardExpensesThisMonth;
+  const creditCardExpensesThisMonth = creditCardNewPurchases.totalPurchasesInPEN;
 
-  // 7. HERO NUMBER: Projected Net Free Operating Liquidity for Next Month
-  // Formula: (Dinero Disponible Hoy + Sueldos del Mes) - (Gastos Fijos Pendientes) - (Tarjeta de Crédito a pagar)
-  const projectedFreeLiquidityNextMonth = (availableCashTodayPEN + totalMonthlyIncomePEN) - pendingFixedExpensesPEN - totalCreditCardBillNextMonth;
+  // Deuda Facturada del Último Estado de Cuenta (a pagar este ciclo)
+  const billedDebtPEN = parseFloat(tcConfig.billedDebtPEN) || 0;
+  const billedDebtUSD = parseFloat(tcConfig.billedDebtUSD) || 0;
+  const totalBilledDebtInPEN = billedDebtPEN + (billedDebtUSD * exchangeRate);
+  const pendingBilledDebtInPEN = tcConfig.isBilledPaidThisMonth ? 0 : totalBilledDebtInPEN;
+
+  // 7. Plan de Ahorro Mensual Programado
+  const savingsPlanPEN = parseFloat(savingsGoal.amountPEN) || 0;
+  const savingsPlanUSD = parseFloat(savingsGoal.amountUSD) || 0;
+  const totalPlannedSavingsInPEN = savingsPlanPEN + (savingsPlanUSD * exchangeRate);
+  const pendingSavingsInPEN = savingsGoal.isTransferredThisMonth ? 0 : totalPlannedSavingsInPEN;
+
+  // 8. PROYECCIÓN DUAL A 2 MESES VISTA
+  // Mes 1 (Próximo Mes Inmediato / Ciclo Facturado):
+  const projectedFreeLiquidityMonth1 = 
+    (availableCashTodayPEN + totalMonthlyIncomePEN) 
+    - pendingFixedExpensesPEN 
+    - pendingBilledDebtInPEN 
+    - pendingSavingsInPEN;
+
+  // Mes 2 (Mes Subsiguiente / Próximo Ciclo con consumos de TC de HOY):
+  const projectedFreeLiquidityMonth2 = 
+    totalMonthlyIncomePEN 
+    - totalFixedExpensesPEN 
+    - creditCardNewPurchases.totalPurchasesInPEN 
+    - totalPlannedSavingsInPEN;
+
+  // Retrocompatibilidad
+  const projectedFreeLiquidityNextMonth = projectedFreeLiquidityMonth1;
+  const totalCreditCardBillNextMonth = pendingBilledDebtInPEN;
+
+  // Helper de ciclo de facturación
+  const cycleInfo = useMemo(() => {
+    const today = new Date().getDate();
+    const closing = parseInt(tcConfig.closingDay) || 20;
+    const due = parseInt(tcConfig.dueDay) || 5;
+    const isPastClosing = today > closing;
+    const daysUntilClosing = isPastClosing ? null : (closing - today);
+    return {
+      today,
+      closing,
+      due,
+      isPastClosing,
+      daysUntilClosing
+    };
+  }, [tcConfig.closingDay, tcConfig.dueDay]);
 
   // Handlers for Accounts
   const handleSaveAccountModal = async (e) => {
@@ -291,11 +358,50 @@ export default function LiquidityManager({
     }
   };
 
-  const handleSaveTcBase = () => {
-    const val = parseFloat(tempTcBase) || 0;
-    setCreditCardBaseDebt(val);
-    localStorage.setItem('saveahorro_tc_base_debt', val.toString());
-    setEditingTcBase(false);
+  const handleUpdateTcConfig = (updates) => {
+    const updated = saveCreditCardConfig({ ...tcConfig, ...updates });
+    setTcConfig(updated);
+  };
+
+  const handleToggleBilledPaid = () => {
+    handleUpdateTcConfig({ isBilledPaidThisMonth: !tcConfig.isBilledPaidThisMonth });
+  };
+
+  const handleSaveTcModal = (e) => {
+    e.preventDefault();
+    if (!tcModal) return;
+    const updated = saveCreditCardConfig({
+      ...tcConfig,
+      ...tcModal,
+      closingDay: parseInt(tcModal.closingDay) || 20,
+      dueDay: parseInt(tcModal.dueDay) || 5,
+      billedDebtPEN: parseFloat(tcModal.billedDebtPEN) || 0,
+      billedDebtUSD: parseFloat(tcModal.billedDebtUSD) || 0
+    });
+    setTcConfig(updated);
+    setTcModal(null);
+  };
+
+  const handleUpdateSavingsGoal = (updates) => {
+    const updated = saveMonthlySavingsGoal({ ...savingsGoal, ...updates });
+    setSavingsGoal(updated);
+  };
+
+  const handleToggleSavingsTransferred = () => {
+    handleUpdateSavingsGoal({ isTransferredThisMonth: !savingsGoal.isTransferredThisMonth });
+  };
+
+  const handleSaveSavingsModal = (e) => {
+    e.preventDefault();
+    if (!savingsModal) return;
+    const updated = saveMonthlySavingsGoal({
+      ...savingsGoal,
+      ...savingsModal,
+      amountPEN: parseFloat(savingsModal.amountPEN) || 0,
+      amountUSD: parseFloat(savingsModal.amountUSD) || 0
+    });
+    setSavingsGoal(updated);
+    setSavingsModal(null);
   };
 
   return (
@@ -366,56 +472,85 @@ export default function LiquidityManager({
           </div>
         </div>
 
-        {/* HERO 3: Liquidez Libre Proyectada del Próximo Mes (Pastel Suave, sin degradado oscuro) */}
+        {/* HERO 3: Liquidez Libre Proyectada (Dual: Mes 1 Inmediato vs Mes 2 Subsiguiente) */}
         <div className="card" style={{
           padding: '1.25rem',
-          borderLeft: `4px solid ${projectedFreeLiquidityNextMonth >= 0 ? '#15803d' : '#be123c'}`,
-          background: projectedFreeLiquidityNextMonth >= 0 ? '#f0fdf4' : '#fff1f2',
-          border: `1px solid ${projectedFreeLiquidityNextMonth >= 0 ? '#bbf7d0' : '#fecdd3'}`,
+          borderLeft: `4px solid ${(activeLiquidityView === 'month1' ? projectedFreeLiquidityMonth1 : projectedFreeLiquidityMonth2) >= 0 ? '#15803d' : '#be123c'}`,
+          background: (activeLiquidityView === 'month1' ? projectedFreeLiquidityMonth1 : projectedFreeLiquidityMonth2) >= 0 ? '#f0fdf4' : '#fff1f2',
+          border: `1px solid ${(activeLiquidityView === 'month1' ? projectedFreeLiquidityMonth1 : projectedFreeLiquidityMonth2) >= 0 ? '#bbf7d0' : '#fecdd3'}`,
           boxShadow: 'var(--shadow-sm)'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <span style={{
-              fontSize: '0.8rem',
-              fontWeight: 700,
-              color: projectedFreeLiquidityNextMonth >= 0 ? '#166534' : '#9f1239',
-              textTransform: 'uppercase',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.35rem'
-            }}>
-              {projectedFreeLiquidityNextMonth >= 0 ? <CheckCircle2 size={15} color="#15803d" /> : <AlertTriangle size={15} color="#be123c" />}
-              Liquidez Libre Próx. Mes
-            </span>
+          {/* Selector Mes 1 vs Mes 2 */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', flexWrap: 'wrap', gap: '0.35rem' }}>
+            <div style={{ display: 'inline-flex', background: '#ffffff', padding: '2px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
+              <button
+                type="button"
+                onClick={() => setActiveLiquidityView('month1')}
+                style={{
+                  padding: '0.2rem 0.5rem',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  borderRadius: '4px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: activeLiquidityView === 'month1' ? 'var(--primary)' : 'transparent',
+                  color: activeLiquidityView === 'month1' ? '#ffffff' : 'var(--text-muted)'
+                }}
+              >
+                1️⃣ Mes Inmediato
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveLiquidityView('month2')}
+                style={{
+                  padding: '0.2rem 0.5rem',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  borderRadius: '4px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: activeLiquidityView === 'month2' ? '#be123c' : 'transparent',
+                  color: activeLiquidityView === 'month2' ? '#ffffff' : 'var(--text-muted)'
+                }}
+                title="Impacto de lo que vas gastando hoy en la tarjeta de crédito"
+              >
+                2️⃣ Subsiguiente (TC)
+              </button>
+            </div>
+
             <span style={{
               fontSize: '0.7rem',
               fontWeight: 700,
               padding: '0.2rem 0.5rem',
               borderRadius: 'var(--radius-sm)',
-              background: projectedFreeLiquidityNextMonth >= 0 ? '#dcfce7' : '#ffe4e6',
-              color: projectedFreeLiquidityNextMonth >= 0 ? '#15803d' : '#9f1239',
-              border: `1px solid ${projectedFreeLiquidityNextMonth >= 0 ? '#bbf7d0' : '#fecdd3'}`
+              background: (activeLiquidityView === 'month1' ? projectedFreeLiquidityMonth1 : projectedFreeLiquidityMonth2) >= 0 ? '#dcfce7' : '#ffe4e6',
+              color: (activeLiquidityView === 'month1' ? projectedFreeLiquidityMonth1 : projectedFreeLiquidityMonth2) >= 0 ? '#15803d' : '#9f1239',
+              border: `1px solid ${(activeLiquidityView === 'month1' ? projectedFreeLiquidityMonth1 : projectedFreeLiquidityMonth2) >= 0 ? '#bbf7d0' : '#fecdd3'}`
             }}>
-              {projectedFreeLiquidityNextMonth >= 0 ? 'Superávit' : 'Déficit'}
+              {(activeLiquidityView === 'month1' ? projectedFreeLiquidityMonth1 : projectedFreeLiquidityMonth2) >= 0 ? 'Superávit' : 'Déficit'}
             </span>
           </div>
+
           <div style={{
             fontSize: '2rem',
             fontWeight: 900,
-            color: projectedFreeLiquidityNextMonth >= 0 ? '#15803d' : '#be123c',
-            marginTop: '0.4rem',
+            color: (activeLiquidityView === 'month1' ? projectedFreeLiquidityMonth1 : projectedFreeLiquidityMonth2) >= 0 ? '#15803d' : '#be123c',
+            marginTop: '0.2rem',
             letterSpacing: '-0.5px'
           }}>
-            {formatMoney(projectedFreeLiquidityNextMonth, 'PEN')}
+            {formatMoney(activeLiquidityView === 'month1' ? projectedFreeLiquidityMonth1 : projectedFreeLiquidityMonth2, 'PEN')}
           </div>
-          <p style={{ fontSize: '0.75rem', color: projectedFreeLiquidityNextMonth >= 0 ? '#166534' : '#9f1239', marginTop: '0.2rem', margin: '0.2rem 0 0 0' }}>
-            Dinero real que te sobrará tras cobrar sueldos y pagar TC y gastos fijos.
+
+          <p style={{ fontSize: '0.74rem', color: (activeLiquidityView === 'month1' ? projectedFreeLiquidityMonth1 : projectedFreeLiquidityMonth2) >= 0 ? '#166534' : '#9f1239', marginTop: '0.25rem', margin: '0.25rem 0 0 0', lineHeight: '1.4' }}>
+            {activeLiquidityView === 'month1'
+              ? 'Dinero real libre tras cobrar sueldos y pagar TC facturada, fijos y ahorro.'
+              : `Alerta anticipada: Con tus compras de tarjeta acumuladas hoy (${formatMoney(creditCardNewPurchases.totalPurchasesInPEN, 'PEN')}), este será tu saldo libre en 2 meses.`}
           </p>
         </div>
 
       </div>
 
-      {/* Summary Formula Bar (Pastel Claro y Legible) */}
+      {/* Summary Formula Bar (Dinámica según Mes 1 o Mes 2) */}
       <div className="card" style={{
         padding: '0.85rem 1.25rem',
         marginBottom: '1.5rem',
@@ -424,28 +559,59 @@ export default function LiquidityManager({
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
-        gap: '0.75rem',
+        gap: '0.75rem 1.25rem',
         background: '#ffffff',
         border: '1px solid var(--border-color)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
-          <div>
-            <span style={{ color: 'var(--text-muted)' }}>1. Saldo Hoy: </span>
-            <strong style={{ color: 'var(--text-main)' }}>S/ {availableCashTodayPEN.toFixed(2)}</strong>
+        {activeLiquidityView === 'month1' ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem 1.25rem', flexWrap: 'wrap' }}>
+            <div>
+              <span style={{ color: 'var(--text-muted)' }}>1. Saldo Hoy: </span>
+              <strong style={{ color: 'var(--text-main)' }}>S/ {availableCashTodayPEN.toFixed(2)}</strong>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-muted)' }}>2. Sueldos (+): </span>
+              <strong style={{ color: '#15803d' }}>+ S/ {totalMonthlyIncomePEN.toFixed(2)}</strong>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-muted)' }}>3. Fijos Pendientes (-): </span>
+              <strong style={{ color: '#b45309' }}>- S/ {pendingFixedExpensesPEN.toFixed(2)}</strong>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-muted)' }}>4. Deuda TC Facturada (-): </span>
+              <strong style={{ color: tcConfig.isBilledPaidThisMonth ? '#15803d' : '#be123c' }}>
+                {tcConfig.isBilledPaidThisMonth ? 'S/ 0.00 (Pagada ✓)' : `- S/ ${pendingBilledDebtInPEN.toFixed(2)}`}
+              </strong>
+            </div>
+            {pendingSavingsInPEN > 0 && (
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>5. Ahorro Programado (-): </span>
+                <strong style={{ color: '#0369a1' }}>- S/ {pendingSavingsInPEN.toFixed(2)}</strong>
+              </div>
+            )}
           </div>
-          <div>
-            <span style={{ color: 'var(--text-muted)' }}>2. Sueldos (+): </span>
-            <strong style={{ color: '#15803d' }}>+ S/ {totalMonthlyIncomePEN.toFixed(2)}</strong>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem 1.25rem', flexWrap: 'wrap' }}>
+            <div>
+              <span style={{ color: 'var(--text-muted)' }}>1. Sueldos Mes 2 (+): </span>
+              <strong style={{ color: '#15803d' }}>+ S/ {totalMonthlyIncomePEN.toFixed(2)}</strong>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-muted)' }}>2. Fijos Recurrentes (-): </span>
+              <strong style={{ color: '#b45309' }}>- S/ {totalFixedExpensesPEN.toFixed(2)}</strong>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-muted)' }}>3. Compras TC de HOY (-): </span>
+              <strong style={{ color: '#be123c' }}>- S/ {creditCardNewPurchases.totalPurchasesInPEN.toFixed(2)}</strong>
+            </div>
+            {totalPlannedSavingsInPEN > 0 && (
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>4. Ahorro Programado (-): </span>
+                <strong style={{ color: '#0369a1' }}>- S/ {totalPlannedSavingsInPEN.toFixed(2)}</strong>
+              </div>
+            )}
           </div>
-          <div>
-            <span style={{ color: 'var(--text-muted)' }}>3. Gastos Fijos Pendientes (-): </span>
-            <strong style={{ color: '#b45309' }}>- S/ {pendingFixedExpensesPEN.toFixed(2)}</strong>
-          </div>
-          <div>
-            <span style={{ color: 'var(--text-muted)' }}>4. Tarjeta Crédito (-): </span>
-            <strong style={{ color: '#be123c' }}>- S/ {totalCreditCardBillNextMonth.toFixed(2)}</strong>
-          </div>
-        </div>
+        )}
 
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
           TC Ref: <strong style={{ color: 'var(--text-main)' }}>1 USD = S/ {exchangeRate.toFixed(3)}</strong>
@@ -484,7 +650,7 @@ export default function LiquidityManager({
           style={{ padding: '0.55rem 1rem', fontSize: '0.84rem' }}
         >
           <Home size={16} />
-          <span>Gastos Fijos del Mes ({fixedExpenses.length})</span>
+          <span>Gastos Fijos & Ahorro ({fixedExpenses.length})</span>
         </button>
 
         <button
@@ -493,7 +659,7 @@ export default function LiquidityManager({
           style={{ padding: '0.55rem 1rem', fontSize: '0.84rem' }}
         >
           <CreditCard size={16} />
-          <span>Tarjeta de Crédito</span>
+          <span>Tarjeta de Crédito & Deudas</span>
         </button>
       </div>
 
@@ -807,213 +973,549 @@ export default function LiquidityManager({
         </div>
       )}
 
-      {/* TAB 3: GASTOS FIJOS DEL MES */}
+      {/* TAB 3: GASTOS FIJOS & AHORRO PLANIFICADO */}
       {activeSection === 'fijos' && (
         <div className="glass-card animate-fade-in" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          
+          {/* Sub-pestañas: Gastos Fijos vs Ahorro Programado */}
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.65rem', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setFixedSubTab('fijos')}
+              className={`chip ${fixedSubTab === 'fijos' ? 'active' : ''}`}
+              style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+            >
+              <Home size={15} />
+              <span>Gastos Fijos del Mes ({fixedExpenses.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFixedSubTab('ahorro')}
+              className={`chip ${fixedSubTab === 'ahorro' ? 'active' : ''}`}
+              style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+            >
+              <PiggyBank size={15} />
+              <span>Plan de Ahorro Mensual {totalPlannedSavingsInPEN > 0 ? `(S/ ${totalPlannedSavingsInPEN.toFixed(0)})` : ''}</span>
+            </button>
+          </div>
+
+          {fixedSubTab === 'fijos' && (
             <div>
-              <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                <Home size={18} color="var(--primary)" />
-                <span>Gastos Fijos del Mes (Proyectados)</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '0.45rem', margin: 0, fontWeight: 800 }}>
+                    <Home size={18} color="var(--primary)" />
+                    <span>Gastos Fijos del Mes (Proyectados)</span>
+                  </h3>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0.2rem 0 0 0' }}>
+                    Gastos fijos que pagas todos los meses (Alquiler, Luz, Agua, Internet, Suscripciones).
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setFixedModal({
+                    id: '',
+                    title: '',
+                    amount: '',
+                    currency: 'PEN',
+                    due_day: 15,
+                    is_paid: false
+                  })}
+                  className="btn btn-primary"
+                  style={{ padding: '0.5rem 0.9rem', fontSize: '0.8rem' }}
+                >
+                  <Plus size={15} />
+                  <span>+ Añadir Gasto Fijo</span>
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                {fixedExpenses.map(fixed => {
+                  const amt = parseFloat(fixed.amount) || 0;
+
+                  return (
+                    <div
+                      key={fixed.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '0.85rem 1rem',
+                        background: fixed.is_paid ? '#f8fafc' : '#ffffff',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-md)',
+                        gap: '0.75rem',
+                        flexWrap: 'wrap'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleFixedPaid(fixed)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: fixed.is_paid ? 'var(--success)' : 'var(--text-muted)',
+                            padding: 0
+                          }}
+                          title={fixed.is_paid ? 'Marcar como pendiente' : 'Marcar como ya pagado este mes'}
+                        >
+                          {fixed.is_paid ? <CheckSquare size={22} color="#15803d" /> : <Square size={22} />}
+                        </button>
+                        <div>
+                          <h4 style={{
+                            fontSize: '0.95rem',
+                            fontWeight: 700,
+                            color: fixed.is_paid ? 'var(--text-muted)' : 'var(--text-main)',
+                            textDecoration: fixed.is_paid ? 'line-through' : 'none',
+                            margin: 0
+                          }}>
+                            {fixed.title}
+                          </h4>
+                          <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                            Vence el día {fixed.due_day} • {fixed.is_paid ? 'Ya pagado este mes' : 'Pendiente de pago'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <div style={{ fontSize: '1.15rem', fontWeight: 800, color: fixed.is_paid ? 'var(--text-muted)' : 'var(--text-main)' }}>
+                          {formatMoney(amt, fixed.currency)}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.35rem' }}>
+                          <button
+                            onClick={() => setFixedModal(fixed)}
+                            className="btn btn-secondary"
+                            style={{ padding: '0.3rem 0.5rem' }}
+                            title="Editar gasto fijo"
+                          >
+                            <Edit2 size={13} color="var(--primary)" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteFixedAction(fixed.id)}
+                            className="btn btn-danger"
+                            style={{ padding: '0.3rem 0.5rem' }}
+                            title="Eliminar gasto fijo"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{
+                marginTop: '1.25rem',
+                padding: '1rem',
+                background: '#ffffff',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-color)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '0.75rem',
+                fontSize: '0.82rem'
+              }}>
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }}>Total compromisos fijos: </span>
+                  <strong style={{ color: 'var(--text-main)' }}>S/ {totalFixedExpensesPEN.toFixed(2)}</strong>
+                </div>
+                <div>
+                  <span style={{ color: '#15803d' }}>Ya pagado: </span>
+                  <strong style={{ color: '#15803d' }}>S/ {paidFixedExpensesPEN.toFixed(2)}</strong>
+                </div>
+                <div>
+                  <span style={{ color: '#b45309' }}>Aún pendiente de pagar: </span>
+                  <strong style={{ color: '#b45309' }}>S/ {pendingFixedExpensesPEN.toFixed(2)}</strong>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {fixedSubTab === 'ahorro' && (
+            <div className="animate-fade-in">
+              <div style={{
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: 'var(--radius-lg)',
+                padding: '1.25rem',
+                marginBottom: '1.25rem'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <div>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#166534', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <PiggyBank size={18} color="#15803d" />
+                      Plan de Ahorro Mensual Programado
+                    </span>
+                    <h3 style={{ fontSize: '1.5rem', color: '#15803d', margin: '0.35rem 0 0 0', fontWeight: 800 }}>
+                      {savingsPlanPEN > 0 ? `S/ ${savingsPlanPEN.toFixed(2)}` : ''}
+                      {savingsPlanPEN > 0 && savingsPlanUSD > 0 ? ' + ' : ''}
+                      {savingsPlanUSD > 0 ? `$ ${savingsPlanUSD.toFixed(2)} USD` : ''}
+                      {savingsPlanPEN === 0 && savingsPlanUSD === 0 ? 'Sin meta programada aún' : ''}
+                    </h3>
+                    {totalPlannedSavingsInPEN > 0 && savingsPlanUSD > 0 && (
+                      <span style={{ fontSize: '0.75rem', color: '#166534' }}>
+                        Equivalente total consolidado: ~S/ {totalPlannedSavingsInPEN.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={handleToggleSavingsTransferred}
+                      style={{
+                        padding: '0.45rem 0.85rem',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid',
+                        borderColor: savingsGoal.isTransferredThisMonth ? '#bbf7d0' : '#86efac',
+                        background: savingsGoal.isTransferredThisMonth ? '#dcfce7' : '#ffffff',
+                        color: savingsGoal.isTransferredThisMonth ? '#15803d' : '#166534',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem'
+                      }}
+                    >
+                      {savingsGoal.isTransferredThisMonth ? <Check size={14} color="#15803d" /> : <Clock size={14} color="#166534" />}
+                      <span>{savingsGoal.isTransferredThisMonth ? 'Transferido a Reserva este mes ✓' : 'Pendiente de Transferir'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSavingsModal({
+                        amountPEN: savingsGoal.amountPEN || '',
+                        amountUSD: savingsGoal.amountUSD || '',
+                        sourceIncomeId: savingsGoal.sourceIncomeId || '',
+                        destinationAccountId: savingsGoal.destinationAccountId || ''
+                      })}
+                      className="btn btn-secondary"
+                      style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
+                    >
+                      <Edit2 size={13} />
+                      <span>Configurar Plan de Ahorro</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Detalle de origen y destino */}
+                <div className="grid-2" style={{ gap: '0.85rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #bbf7d0' }}>
+                  <div style={{ background: '#ffffff', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid #dcfce7' }}>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>
+                      💼 Sueldo / Ingreso de Origen:
+                    </span>
+                    <strong style={{ fontSize: '0.88rem', color: 'var(--text-main)', marginTop: '0.2rem', display: 'block' }}>
+                      {incomes.find(i => i.id === savingsGoal.sourceIncomeId)?.title || 'Ingresos generales del mes'}
+                    </strong>
+                    {savingsPlanUSD > 0 && (
+                      <span style={{ fontSize: '0.72rem', color: '#166534', marginTop: '0.15rem', display: 'block' }}>
+                        💵 Los dólares se extraen directamente de tus ingresos en USD sin conversiones intermedias.
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ background: '#ffffff', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid #dcfce7' }}>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>
+                      🏦 Cuenta de Destino (Reserva Intocable):
+                    </span>
+                    <strong style={{ fontSize: '0.88rem', color: 'var(--text-main)', marginTop: '0.2rem', display: 'block' }}>
+                      {accounts.find(a => a.id === savingsGoal.destinationAccountId)?.name || 'Ahorros de Reserva Intocables'}
+                    </strong>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem', display: 'block' }}>
+                      {savingsGoal.isTransferredThisMonth ? '✓ Ya sumado a tus saldos protegidos.' : '⏳ Se sumará a tus reservas al transferirlo.'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{
+                background: '#f8fafc',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.85rem 1.15rem',
+                fontSize: '0.8rem',
+                color: 'var(--text-muted)',
+                lineHeight: '1.5',
+                border: '1px solid var(--border-color)'
+              }}>
+                💡 <strong>Regla Financiera de Oro:</strong> El dinero que programas para ahorro no es un gasto, pero tampoco es liquidez libre para gastar en el día a día. Al registrarlo aquí, la aplicación lo aparta automáticamente de tu <strong>Liquidez Libre del Mes</strong>, protegiéndolo de compras impulsivas.
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
+
+      {/* TAB 4: TARJETA DE CRÉDITO & DEUDAS */}
+      {activeSection === 'tarjeta' && (
+        <div className="card animate-fade-in" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+          
+          {/* Encabezado y resumen de tarjeta */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div>
+              <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '0.45rem', color: 'var(--text-main)', margin: 0, fontWeight: 800 }}>
+                <CreditCard size={18} color="#dc2626" />
+                <span>Tarjeta de Crédito: Ciclo, Deuda y Consumos</span>
               </h3>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                Gastos fijos que pagas todos los meses (Alquiler, Luz, Agua, Internet, Suscripciones).
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0.2rem 0 0 0' }}>
+                Distingue con total claridad lo que debes pagar este mes según tu estado de cuenta vs lo que vas gastando hoy para el mes subsiguiente.
               </p>
             </div>
 
             <button
-              onClick={() => setFixedModal({
-                id: '',
-                title: '',
-                amount: '',
-                currency: 'PEN',
-                due_day: 15,
-                is_paid: false
+              onClick={() => setTcModal({
+                name: tcConfig.name || 'Tarjeta de Crédito Principal',
+                bank: tcConfig.bank || 'BCP',
+                closingDay: tcConfig.closingDay || 20,
+                dueDay: tcConfig.dueDay || 5,
+                billedDebtPEN: tcConfig.billedDebtPEN || '',
+                billedDebtUSD: tcConfig.billedDebtUSD || '',
+                paymentAccountPEN: tcConfig.paymentAccountPEN || '',
+                paymentAccountUSD: tcConfig.paymentAccountUSD || ''
               })}
-              className="btn btn-primary"
-              style={{ padding: '0.5rem 0.9rem', fontSize: '0.8rem' }}
+              className="btn btn-secondary"
+              style={{ padding: '0.5rem 0.85rem', fontSize: '0.8rem' }}
             >
-              <Plus size={15} />
-              <span>+ Añadir Gasto Fijo</span>
+              <Edit2 size={13} />
+              <span>⚙️ Configurar Tarjeta & Fechas</span>
             </button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-            {fixedExpenses.map(fixed => {
-              const amt = parseFloat(fixed.amount) || 0;
+          {/* Banner del Ciclo de Facturación en Vivo */}
+          <div style={{
+            background: '#f8fafc',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.85rem 1.15rem',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.75rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: 'var(--radius-sm)',
+                background: '#fee2e2',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#dc2626',
+                flexShrink: 0
+              }}>
+                <Calendar size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                  {tcConfig.name} ({tcConfig.bank}) • Corte: día {tcConfig.closingDay} | Último día de Pago: día {tcConfig.dueDay}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  {!cycleInfo.isPastClosing
+                    ? `📅 Ciclo actual en curso: Cierra en ${cycleInfo.daysUntilClosing} día(s) (el ${tcConfig.closingDay}). Vencerá el día ${tcConfig.dueDay} del próximo mes.`
+                    : `📅 Ya cerró el corte del día ${tcConfig.closingDay}. Las compras que hagas hoy vencerán el día ${tcConfig.dueDay} del MES SUBSIGUIENTE.`}
+                </div>
+              </div>
+            </div>
 
-              return (
-                <div
-                  key={fixed.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0.85rem 1rem',
-                    background: fixed.is_paid ? '#f8fafc' : '#ffffff',
-                    border: `1px solid ${fixed.is_paid ? 'var(--border-color)' : 'var(--border-color)'}`,
-                    borderRadius: 'var(--radius-md)',
-                    gap: '0.75rem',
-                    flexWrap: 'wrap'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleFixedPaid(fixed)}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        cursor: 'pointer',
-                        color: fixed.is_paid ? 'var(--success)' : 'var(--text-muted)',
-                        padding: 0
-                      }}
-                      title={fixed.is_paid ? 'Marcar como pendiente' : 'Marcar como ya pagado este mes'}
-                    >
-                      {fixed.is_paid ? <CheckSquare size={22} color="#15803d" /> : <Square size={22} />}
-                    </button>
-                    <div>
-                      <h4 style={{
-                        fontSize: '0.95rem',
-                        fontWeight: 700,
-                        color: fixed.is_paid ? 'var(--text-muted)' : 'var(--text-main)',
-                        textDecoration: fixed.is_paid ? 'line-through' : 'none',
-                        margin: 0
-                      }}>
-                        {fixed.title}
-                      </h4>
-                      <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                        Vence el día {fixed.due_day} • {fixed.is_paid ? 'Ya pagado este mes' : 'Pendiente de pago'}
-                      </span>
-                    </div>
+            <span style={{
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              padding: '0.2rem 0.6rem',
+              borderRadius: 'var(--radius-full)',
+              background: !cycleInfo.isPastClosing ? '#e0f2fe' : '#fef3c7',
+              color: !cycleInfo.isPastClosing ? '#0369a1' : '#92400e',
+              border: `1px solid ${!cycleInfo.isPastClosing ? '#bae6fd' : '#fde68a'}`
+            }}>
+              {!cycleInfo.isPastClosing ? 'Antes del Corte' : 'Post-Corte (Próx. Ciclo)'}
+            </span>
+          </div>
+
+          {/* 2 BLOQUES: DEUDA FACTURADA A PAGAR vs CONSUMOS NUEVOS DE HOY */}
+          <div className="grid-2" style={{ gap: '1.25rem', marginBottom: '1.25rem' }}>
+            
+            {/* BLOQUE A: Deuda del Último Estado de Cuenta (A pagar este mes) */}
+            <div style={{
+              background: '#fff1f2',
+              border: '1px solid #fecdd3',
+              borderRadius: 'var(--radius-lg)',
+              padding: '1.25rem',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between'
+            }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#9f1239', textTransform: 'uppercase' }}>
+                    1. Deuda Facturada a Pagar (Mes Inmediato)
+                  </span>
+                  <span style={{
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    padding: '0.2rem 0.5rem',
+                    borderRadius: 'var(--radius-sm)',
+                    background: tcConfig.isBilledPaidThisMonth ? '#dcfce7' : '#ffe4e6',
+                    color: tcConfig.isBilledPaidThisMonth ? '#15803d' : '#9f1239',
+                    border: `1px solid ${tcConfig.isBilledPaidThisMonth ? '#bbf7d0' : '#fecdd3'}`
+                  }}>
+                    {tcConfig.isBilledPaidThisMonth ? 'Pagada este mes ✓' : `Vence el día ${tcConfig.dueDay}`}
+                  </span>
+                </div>
+
+                <div style={{ fontSize: '2rem', fontWeight: 900, color: '#be123c', letterSpacing: '-0.5px' }}>
+                  {formatMoney(totalBilledDebtInPEN, 'PEN')}
+                </div>
+                {(billedDebtPEN > 0 || billedDebtUSD > 0) && (
+                  <div style={{ fontSize: '0.78rem', color: '#9f1239', marginTop: '0.2rem', fontWeight: 600 }}>
+                    S/ {billedDebtPEN.toFixed(2)} Soles {billedDebtUSD > 0 ? `+ $ ${billedDebtUSD.toFixed(2)} USD` : ''}
                   </div>
+                )}
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ fontSize: '1.15rem', fontWeight: 800, color: fixed.is_paid ? 'var(--text-muted)' : 'var(--text-main)' }}>
-                      {formatMoney(amt, fixed.currency)}
+                {/* Cuentas de donde saldrá el pago */}
+                <div style={{ marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px solid #fecdd3' }}>
+                  <div style={{ fontSize: '0.74rem', color: '#9f1239', fontWeight: 600, marginBottom: '0.35rem' }}>
+                    💳 Cuentas para Pagar esta Deuda:
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', fontSize: '0.76rem' }}>
+                    <div>
+                      <span style={{ color: 'var(--text-muted)' }}>Pago en Soles: </span>
+                      <strong style={{ color: 'var(--text-main)' }}>
+                        {accounts.find(a => a.id === tcConfig.paymentAccountPEN)?.name || 'Sin cuenta asignada'}
+                      </strong>
                     </div>
-
-                    <div style={{ display: 'flex', gap: '0.35rem' }}>
-                      <button
-                        onClick={() => setFixedModal(fixed)}
-                        className="btn btn-secondary"
-                        style={{ padding: '0.3rem 0.5rem' }}
-                      >
-                        <Edit2 size={13} color="var(--primary)" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteFixedAction(fixed.id)}
-                        className="btn btn-danger"
-                        style={{ padding: '0.3rem 0.5rem' }}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+                    {billedDebtUSD > 0 && (
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Pago en Dólares: </span>
+                        <strong style={{ color: 'var(--text-main)' }}>
+                          {accounts.find(a => a.id === tcConfig.paymentAccountUSD)?.name || 'Sin cuenta asignada'}
+                        </strong>
+                      </div>
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-
-          <div style={{
-            marginTop: '1.25rem',
-            padding: '1rem',
-            background: '#ffffff',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--border-color)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '0.75rem',
-            fontSize: '0.82rem'
-          }}>
-            <div>
-              <span style={{ color: 'var(--text-muted)' }}>Total compromisos fijos: </span>
-              <strong style={{ color: 'var(--text-main)' }}>S/ {totalFixedExpensesPEN.toFixed(2)}</strong>
-            </div>
-            <div>
-              <span style={{ color: '#15803d' }}>Ya pagado: </span>
-              <strong style={{ color: '#15803d' }}>S/ {paidFixedExpensesPEN.toFixed(2)}</strong>
-            </div>
-            <div>
-              <span style={{ color: '#b45309' }}>Aún pendiente de pagar: </span>
-              <strong style={{ color: '#b45309' }}>S/ {pendingFixedExpensesPEN.toFixed(2)}</strong>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: TARJETA DE CRÉDITO & DEUDAS (Pastel Coral/Rose) */}
-      {activeSection === 'tarjeta' && (
-        <div className="card animate-fade-in" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <div>
-              <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '0.45rem', color: 'var(--text-main)', margin: 0, fontWeight: 800 }}>
-                <CreditCard size={18} color="#dc2626" />
-                <span>Tarjeta de Crédito a Pagar el Próximo Mes</span>
-              </h3>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0.2rem 0 0 0' }}>
-                Se calcula automáticamente sumando todos los gastos que registraste con "Tarjeta Crédito" este mes.
-              </p>
-            </div>
-
-            {!editingTcBase ? (
-              <button
-                onClick={() => {
-                  setTempTcBase(creditCardBaseDebt.toString());
-                  setEditingTcBase(true);
-                }}
-                className="btn btn-secondary"
-                style={{ padding: '0.5rem 0.85rem', fontSize: '0.78rem' }}
-              >
-                <Edit2 size={13} />
-                <span>Ajustar Deuda de Corte Previa</span>
-              </button>
-            ) : (
-              <button
-                onClick={handleSaveTcBase}
-                className="btn btn-primary"
-                style={{ padding: '0.5rem 0.85rem', fontSize: '0.78rem' }}
-              >
-                <Check size={13} />
-                <span>Guardar Saldo</span>
-              </button>
-            )}
-          </div>
-
-          <div style={{
-            background: '#fff1f2',
-            border: '1px solid #fecdd3',
-            borderRadius: 'var(--radius-md)',
-            padding: '1.25rem',
-            marginBottom: '1rem'
-          }}>
-            <div style={{ fontSize: '0.8rem', color: '#9f1239', fontWeight: 700 }}>
-              Total Deuda Tarjeta de Crédito Próx. Mes:
-            </div>
-            <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#be123c', marginTop: '0.25rem', letterSpacing: '-0.5px' }}>
-              {formatMoney(totalCreditCardBillNextMonth, 'PEN')}
-            </div>
-
-            {editingTcBase ? (
-              <div style={{ marginTop: '0.75rem' }}>
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Saldo previo de tu último estado de cuenta de la tarjeta (S/):
-                </label>
-                <input
-                  type="number"
-                  value={tempTcBase}
-                  onChange={(e) => setTempTcBase(e.target.value)}
-                  className="form-input"
-                  style={{ maxWidth: '240px', marginTop: '0.25rem', fontSize: '0.95rem' }}
-                />
               </div>
-            ) : (
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-                Desglose: S/ {creditCardExpensesThisMonth.toFixed(2)} compras del mes {creditCardBaseDebt > 0 && `+ S/ ${creditCardBaseDebt.toFixed(2)} corte anterior`}.
+
+              {/* Botón de acción rápido */}
+              <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={handleToggleBilledPaid}
+                  style={{
+                    flex: 1,
+                    padding: '0.55rem 0.85rem',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid',
+                    borderColor: tcConfig.isBilledPaidThisMonth ? '#bbf7d0' : '#fecdd3',
+                    background: tcConfig.isBilledPaidThisMonth ? '#dcfce7' : '#ffffff',
+                    color: tcConfig.isBilledPaidThisMonth ? '#15803d' : '#be123c',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.35rem'
+                  }}
+                >
+                  {tcConfig.isBilledPaidThisMonth ? <Check size={14} color="#15803d" /> : <Clock size={14} color="#be123c" />}
+                  <span>{tcConfig.isBilledPaidThisMonth ? '✓ Deuda Pagada este mes' : 'Marcar como Pagada este mes'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTcModal({
+                    name: tcConfig.name,
+                    bank: tcConfig.bank,
+                    closingDay: tcConfig.closingDay,
+                    dueDay: tcConfig.dueDay,
+                    billedDebtPEN: tcConfig.billedDebtPEN,
+                    billedDebtUSD: tcConfig.billedDebtUSD,
+                    paymentAccountPEN: tcConfig.paymentAccountPEN,
+                    paymentAccountUSD: tcConfig.paymentAccountUSD
+                  })}
+                  className="btn btn-secondary"
+                  style={{ padding: '0.55rem 0.75rem', fontSize: '0.8rem' }}
+                  title="Editar montos de estado de cuenta"
+                >
+                  <Edit2 size={13} />
+                </button>
               </div>
-            )}
+            </div>
+
+            {/* BLOQUE B: Consumos del Ciclo Actual en Curso (Lo que gastas HOY) */}
+            <div style={{
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              borderRadius: 'var(--radius-lg)',
+              padding: '1.25rem',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between'
+            }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#1e40af', textTransform: 'uppercase' }}>
+                    2. Consumos Acumulados HOY (Ciclo en Curso)
+                  </span>
+                  <span style={{
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    padding: '0.2rem 0.5rem',
+                    borderRadius: 'var(--radius-sm)',
+                    background: '#dbeafe',
+                    color: '#1e40af',
+                    border: '1px solid #bfdbfe'
+                  }}>
+                    A pagar el Mes Subsiguiente
+                  </span>
+                </div>
+
+                <div style={{ fontSize: '2rem', fontWeight: 900, color: '#1d4ed8', letterSpacing: '-0.5px' }}>
+                  {formatMoney(creditCardNewPurchases.totalPurchasesInPEN, 'PEN')}
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#1e40af', marginTop: '0.2rem', fontWeight: 600 }}>
+                  S/ {creditCardNewPurchases.purchasesPEN.toFixed(2)} Soles {creditCardNewPurchases.purchasesUSD > 0 ? `+ $ ${creditCardNewPurchases.purchasesUSD.toFixed(2)} USD` : ''}
+                </div>
+
+                <p style={{ fontSize: '0.75rem', color: '#1e40af', marginTop: '0.5rem', lineHeight: '1.4' }}>
+                  Compras registradas con "Tarjeta Crédito" este mes. Cerrarán el corte del día {tcConfig.closingDay} y <strong>afectarán tu liquidez en el mes subsiguiente</strong>.
+                </p>
+              </div>
+
+              {/* Lista breve de compras */}
+              <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #bfdbfe' }}>
+                <div style={{ fontSize: '0.74rem', color: '#1e40af', fontWeight: 700, marginBottom: '0.35rem' }}>
+                  Compras recientes del ciclo ({creditCardNewPurchases.purchasesList.length}):
+                </div>
+                {creditCardNewPurchases.purchasesList.length === 0 ? (
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    No hay compras nuevas en este ciclo.
+                  </div>
+                ) : (
+                  <div style={{ maxHeight: '90px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    {creditCardNewPurchases.purchasesList.slice(0, 5).map(exp => (
+                      <div key={exp.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem' }}>
+                        <span style={{ color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '170px' }}>
+                          {exp.description || exp.category}
+                        </span>
+                        <strong style={{ color: '#1d4ed8' }}>
+                          {formatMoney(exp.amount, exp.currency)}
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
           </div>
 
           <div style={{
@@ -1025,7 +1527,13 @@ export default function LiquidityManager({
             lineHeight: '1.5',
             border: '1px solid var(--border-color)'
           }}>
-            💡 <strong>Consejo de Ahorro:</strong> Cada vez que registras un gasto eligiendo "Tarjeta Crédito", se acumula automáticamente en esta cuenta para que nunca te sorprenda el recibo del banco ni pagues intereses.
+            💡 <strong>Consejo Financiero para no confundirte:</strong>
+            <br />
+            1. En <strong>"Deuda Facturada"</strong> anotas el monto que te llegó en tu último estado de cuenta y eliges con qué cuenta pagarlo.
+            <br />
+            2. Si luego registras boletas pasadas que ya estaban dentro de ese recibo, activa la casilla <strong>"📋 Gasto histórico"</strong> al registrar para que no se sumen dos veces.
+            <br />
+            3. Todo gasto nuevo que hagas con la tarjeta irá automáticamente a <strong>"Consumos Acumulados HOY"</strong> y lo pagarás en el mes subsiguiente.
           </div>
         </div>
       )}
@@ -1655,6 +2163,412 @@ export default function LiquidityManager({
                 >
                   <Check size={16} />
                   <span>Guardar Gasto Fijo</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIGURACIÓN DE TARJETA DE CRÉDITO Y ESTADO DE CUENTA */}
+      {tcModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1200,
+          padding: '1rem',
+          overflowY: 'auto'
+        }}>
+          <div className="card animate-fade-in" style={{
+            width: '100%',
+            maxWidth: '520px',
+            padding: '1.5rem',
+            position: 'relative',
+            maxHeight: '92vh',
+            overflowY: 'auto',
+            boxShadow: 'var(--shadow-xl)',
+            background: '#ffffff',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border-color)'
+          }}>
+            <button
+              onClick={() => setTcModal(null)}
+              style={{
+                position: 'absolute',
+                top: '1rem',
+                right: '1rem',
+                background: 'var(--bg-card-hover)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-muted)',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <X size={15} />
+            </button>
+
+            <h3 style={{ fontSize: '1.2rem', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.45rem', fontWeight: 800, color: 'var(--text-main)' }}>
+              <CreditCard size={18} color="#be123c" />
+              <span>Configurar Tarjeta & Estado de Cuenta</span>
+            </h3>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+              Define tu fecha de corte, fecha de pago y el saldo facturado exacto a cancelar este mes según tu banco.
+            </p>
+
+            <form onSubmit={handleSaveTcModal}>
+              {/* Nombre y Banco */}
+              <div className="grid-2" style={{ marginBottom: '1rem' }}>
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.78rem' }}>Nombre de la Tarjeta</label>
+                  <input
+                    type="text"
+                    value={tcModal.name}
+                    onChange={(e) => setTcModal({ ...tcModal, name: e.target.value })}
+                    className="form-input"
+                    placeholder="Ej: BCP Visa Signature"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.78rem' }}>Banco Emisor</label>
+                  <input
+                    type="text"
+                    value={tcModal.bank}
+                    onChange={(e) => setTcModal({ ...tcModal, bank: e.target.value })}
+                    className="form-input"
+                    placeholder="Ej: BCP, BBVA, Interbank"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Días de Corte y Pago */}
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.85rem',
+                marginBottom: '1rem'
+              }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <Calendar size={14} color="var(--primary)" />
+                  <span>Fechas Clave del Ciclo Bancario</span>
+                </div>
+                <div className="grid-2" style={{ gap: '0.75rem' }}>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.74rem', marginBottom: '0.2rem' }}>Día de Corte mensual</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={tcModal.closingDay}
+                      onChange={(e) => setTcModal({ ...tcModal, closingDay: e.target.value })}
+                      className="form-input"
+                      placeholder="Ej: 20"
+                      required
+                    />
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.2rem' }}>
+                      Día que el banco cierra y emite tu recibo.
+                    </span>
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.74rem', marginBottom: '0.2rem' }}>Día Límite de Pago mensual</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={tcModal.dueDay}
+                      onChange={(e) => setTcModal({ ...tcModal, dueDay: e.target.value })}
+                      className="form-input"
+                      placeholder="Ej: 5"
+                      required
+                    />
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.2rem' }}>
+                      Fecha límite para pagar sin intereses.
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Deuda Facturada a Pagar (Mes Inmediato) */}
+              <div style={{
+                background: '#fff1f2',
+                border: '1px solid #fecdd3',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.85rem',
+                marginBottom: '1rem'
+              }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#9f1239', marginBottom: '0.35rem' }}>
+                  Deuda Facturada según tu Estado de Cuenta (A pagar este mes)
+                </div>
+                <p style={{ fontSize: '0.72rem', color: '#881337', margin: '0 0 0.65rem 0', lineHeight: '1.35' }}>
+                  Anota el monto total facturado a pagar este ciclo. <em>(Tus consumos nuevos posteriores al corte se computan aparte automáticamente para el mes subsiguiente)</em>.
+                </p>
+
+                <div className="grid-2" style={{ gap: '0.75rem' }}>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.74rem', color: '#9f1239' }}>Deuda en Soles (S/)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={tcModal.billedDebtPEN}
+                      onChange={(e) => setTcModal({ ...tcModal, billedDebtPEN: e.target.value })}
+                      className="form-input"
+                      placeholder="0.00"
+                      style={{ fontWeight: 700 }}
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.74rem', color: '#9f1239' }}>Deuda en Dólares ($ USD)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={tcModal.billedDebtUSD}
+                      onChange={(e) => setTcModal({ ...tcModal, billedDebtUSD: e.target.value })}
+                      className="form-input"
+                      placeholder="0.00"
+                      style={{ fontWeight: 700 }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Cuenta de débito con que se pagará */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '0.25rem' }}>
+                  ¿Con qué cuenta operativa pagarás la deuda de la tarjeta?
+                </label>
+                <select
+                  value={tcModal.paymentAccountPEN || ''}
+                  onChange={(e) => setTcModal({ ...tcModal, paymentAccountPEN: e.target.value })}
+                  className="form-input"
+                  style={{ fontSize: '0.85rem' }}
+                >
+                  <option value="">Seleccionar cuenta para pagar soles...</option>
+                  {accountsWithComputedBalances.filter(a => a.is_operating && a.currency === 'PEN').map(acc => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} ({acc.bank}) - Saldo: S/ {((parseFloat(acc.computedBalance ?? acc.initial_balance)) || 0).toFixed(2)}
+                    </option>
+                  ))}
+                </select>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.25rem' }}>
+                  Indica la cuenta de sueldo o débito de donde saldrá el dinero para cancelar este recibo.
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setTcModal(null)}
+                  className="btn btn-secondary"
+                  style={{ padding: '0.6rem 1rem', fontSize: '0.85rem' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ padding: '0.6rem 1.25rem', fontSize: '0.85rem', fontWeight: 700 }}
+                >
+                  <Check size={16} />
+                  <span>Guardar Configuración</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIGURACIÓN PLAN DE AHORRO MENSUAL */}
+      {savingsModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1200,
+          padding: '1rem',
+          overflowY: 'auto'
+        }}>
+          <div className="card animate-fade-in" style={{
+            width: '100%',
+            maxWidth: '500px',
+            padding: '1.5rem',
+            position: 'relative',
+            maxHeight: '92vh',
+            overflowY: 'auto',
+            boxShadow: 'var(--shadow-xl)',
+            background: '#ffffff',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border-color)'
+          }}>
+            <button
+              onClick={() => setSavingsModal(null)}
+              style={{
+                position: 'absolute',
+                top: '1rem',
+                right: '1rem',
+                background: 'var(--bg-card-hover)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-muted)',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <X size={15} />
+            </button>
+
+            <h3 style={{ fontSize: '1.2rem', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.45rem', fontWeight: 800, color: 'var(--text-main)' }}>
+              <PiggyBank size={18} color="#15803d" />
+              <span>Configurar Plan de Ahorro Mensual</span>
+            </h3>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+              Define cuánto dinero separarás de tus ingresos hacia tu reserva intocable. Se descuenta de tu liquidez libre para no gastarlo.
+            </p>
+
+            <form onSubmit={handleSaveSavingsModal}>
+              {/* Montos a ahorrar */}
+              <div className="grid-2" style={{ marginBottom: '1rem' }}>
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.78rem', color: '#15803d' }}>
+                    Ahorro en Soles (S/)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={savingsModal.amountPEN}
+                    onChange={(e) => setSavingsModal({ ...savingsModal, amountPEN: e.target.value })}
+                    className="form-input"
+                    placeholder="0.00"
+                    style={{ fontWeight: 700 }}
+                  />
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.2rem' }}>
+                    Monto mensual a transferir a reserva.
+                  </span>
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.78rem', color: '#15803d' }}>
+                    Ahorro en Dólares ($ USD)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={savingsModal.amountUSD}
+                    onChange={(e) => setSavingsModal({ ...savingsModal, amountUSD: e.target.value })}
+                    className="form-input"
+                    placeholder="0.00"
+                    style={{ fontWeight: 700 }}
+                  />
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.2rem' }}>
+                    Directo sin conversión si tienes sueldo en USD.
+                  </span>
+                </div>
+              </div>
+
+              {/* Origen de los fondos */}
+              <div style={{ marginBottom: '1rem' }}>
+                <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '0.25rem' }}>
+                  ¿De qué ingreso / sueldo se descontará este ahorro?
+                </label>
+                <select
+                  value={savingsModal.sourceIncomeId || ''}
+                  onChange={(e) => setSavingsModal({ ...savingsModal, sourceIncomeId: e.target.value })}
+                  className="form-input"
+                  style={{ fontSize: '0.85rem' }}
+                >
+                  <option value="">Cualquier ingreso disponible (general)</option>
+                  {incomes.map(inc => (
+                    <option key={inc.id} value={inc.id}>
+                      {inc.title} - {inc.currency === 'USD' ? `$ ${inc.amount} USD` : `S/ ${inc.amount}`} ({inc.regime || 'General'})
+                    </option>
+                  ))}
+                </select>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.25rem' }}>
+                  💡 Si seleccionas un sueldo en dólares, el ahorro se extrae directamente de esos dólares sin conversión forzada.
+                </span>
+              </div>
+
+              {/* Destino de los fondos */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '0.25rem' }}>
+                  ¿A qué cuenta de ahorro / reserva irá destinado?
+                </label>
+                <select
+                  value={savingsModal.destinationAccountId || ''}
+                  onChange={(e) => setSavingsModal({ ...savingsModal, destinationAccountId: e.target.value })}
+                  className="form-input"
+                  style={{ fontSize: '0.85rem' }}
+                >
+                  <option value="">Seleccionar cuenta de reserva...</option>
+                  {accounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} ({acc.bank} • {acc.currency}) - {!acc.is_operating ? '🛡️ Reserva' : 'Operativa'}
+                    </option>
+                  ))}
+                </select>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.25rem' }}>
+                  Cuenta donde guardarás este dinero para que quede intocable.
+                </span>
+              </div>
+
+              {/* Explicación de Liquidez */}
+              <div style={{
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.75rem',
+                marginBottom: '1.25rem',
+                fontSize: '0.74rem',
+                color: '#166534',
+                lineHeight: '1.4'
+              }}>
+                🔒 <strong>Impacto en tu liquidez:</strong> Como este dinero va a tu fondo de reserva, se resta de tu "Liquidez Libre para Gastar" del próximo mes. Así garantizas que no contarás con él para el día a día.
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setSavingsModal(null)}
+                  className="btn btn-secondary"
+                  style={{ padding: '0.6rem 1rem', fontSize: '0.85rem' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ padding: '0.6rem 1.25rem', fontSize: '0.85rem', fontWeight: 700 }}
+                >
+                  <Check size={16} />
+                  <span>Guardar Plan de Ahorro</span>
                 </button>
               </div>
             </form>

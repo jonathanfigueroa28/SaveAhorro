@@ -38,6 +38,7 @@ export default function ExpenseForm({
   const [bank, setBank] = useState('');
   const [place, setPlace] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [isHistoricalAlreadyBilled, setIsHistoricalAlreadyBilled] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
 
   // Sync if parent currency changes
@@ -145,6 +146,7 @@ export default function ExpenseForm({
       account_id: selectedAccountId || null,
       bank: bank || null,
       place: place.trim() || null,
+      is_historical_already_billed: isHistoricalAlreadyBilled,
       date: new Date(date).toISOString()
     });
 
@@ -152,6 +154,7 @@ export default function ExpenseForm({
     setAmount('');
     setDescription('');
     setPlace('');
+    setIsHistoricalAlreadyBilled(false);
     setShowAdvanced(false);
 
     if (res?.cloudError) {
@@ -534,6 +537,38 @@ export default function ExpenseForm({
                       style={{ fontSize: '0.8rem', padding: '0.5rem 0.65rem' }}
                     />
                   </div>
+                </div>
+
+                {/* Opción para registrar consumo histórico / ya facturado en tarjeta o saldo */}
+                <div
+                  style={{
+                    padding: '0.75rem 0.85rem',
+                    background: isHistoricalAlreadyBilled ? '#f0fdf4' : '#ffffff',
+                    border: `1px solid ${isHistoricalAlreadyBilled ? '#86efac' : 'var(--border-color)'}`,
+                    borderRadius: 'var(--radius-sm)',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.65rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onClick={() => setIsHistoricalAlreadyBilled(!isHistoricalAlreadyBilled)}
+                >
+                  <input
+                    type="checkbox"
+                    id="is_historical_checkbox"
+                    checked={isHistoricalAlreadyBilled}
+                    onChange={(e) => setIsHistoricalAlreadyBilled(e.target.checked)}
+                    style={{ width: '16px', height: '16px', marginTop: '2px', accentColor: '#16a34a', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="is_historical_checkbox" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: isHistoricalAlreadyBilled ? '#15803d' : 'var(--text-main)', display: 'block' }}>
+                      📋 Gasto histórico (Ya pagado / Ya incluido en estado de cuenta)
+                    </span>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: '1.4', display: 'block', marginTop: '2px' }}>
+                      Márcalo si ya ingresaste tu deuda de tarjeta o saldo inicial y solo quieres registrar boletas pasadas para tu historial y reportes sin descontar ni duplicar deudas.
+                    </span>
+                  </label>
                 </div>
               </div>
             )}
