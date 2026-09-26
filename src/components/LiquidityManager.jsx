@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   formatMoney,
   PERU_BANKS,
@@ -8,8 +8,10 @@ import {
   deleteIncome,
   saveFixedExpense,
   deleteFixedExpense,
+  getCachedCreditCardConfig,
   fetchCreditCardConfig,
   saveCreditCardConfig,
+  getCachedMonthlySavingsGoal,
   fetchMonthlySavingsGoal,
   saveMonthlySavingsGoal
 } from '../lib/supabaseClient';
@@ -69,12 +71,29 @@ export default function LiquidityManager({
   const [fixedModal, setFixedModal] = useState(null);
   
   // Tarjeta de Crédito y Ahorro Programado State
-  const [tcConfig, setTcConfig] = useState(() => fetchCreditCardConfig());
+  const [tcConfig, setTcConfig] = useState(() => getCachedCreditCardConfig());
   const [tcModal, setTcModal] = useState(null);
-  const [savingsGoal, setSavingsGoal] = useState(() => fetchMonthlySavingsGoal());
+  const [savingsGoal, setSavingsGoal] = useState(() => getCachedMonthlySavingsGoal());
   const [savingsModal, setSavingsModal] = useState(null);
   const [activeLiquidityView, setActiveLiquidityView] = useState('month1'); // 'month1' (próximo mes) | 'month2' (subsiguiente mes)
   const [fixedSubTab, setFixedSubTab] = useState('fijos'); // 'fijos' | 'ahorro'
+
+  // Sincronizar configuración de tarjeta de crédito y plan de ahorro desde Supabase en la nube
+  useEffect(() => {
+    let isMounted = true;
+    Promise.all([
+      fetchCreditCardConfig(),
+      fetchMonthlySavingsGoal()
+    ]).then(([cloudTc, cloudSavings]) => {
+      if (isMounted) {
+        if (cloudTc) setTcConfig(cloudTc);
+        if (cloudSavings) setSavingsGoal(cloudSavings);
+      }
+    }).catch(err => {
+      console.warn('Notice loading cloud TC/savings in LiquidityManager:', err);
+    });
+    return () => { isMounted = false; };
+  }, []);
 
   // 1. Current month expenses filter
   const currentMonthExpenses = useMemo(() => {
@@ -358,8 +377,8 @@ export default function LiquidityManager({
     }
   };
 
-  const handleUpdateTcConfig = (updates) => {
-    const updated = saveCreditCardConfig({ ...tcConfig, ...updates });
+  const handleUpdateTcConfig = async (updates) => {
+    const updated = await saveCreditCardConfig({ ...tcConfig, ...updates });
     setTcConfig(updated);
   };
 
@@ -367,10 +386,10 @@ export default function LiquidityManager({
     handleUpdateTcConfig({ isBilledPaidThisMonth: !tcConfig.isBilledPaidThisMonth });
   };
 
-  const handleSaveTcModal = (e) => {
+  const handleSaveTcModal = async (e) => {
     e.preventDefault();
     if (!tcModal) return;
-    const updated = saveCreditCardConfig({
+    const updated = await saveCreditCardConfig({
       ...tcConfig,
       ...tcModal,
       closingDay: parseInt(tcModal.closingDay) || 20,
@@ -382,8 +401,8 @@ export default function LiquidityManager({
     setTcModal(null);
   };
 
-  const handleUpdateSavingsGoal = (updates) => {
-    const updated = saveMonthlySavingsGoal({ ...savingsGoal, ...updates });
+  const handleUpdateSavingsGoal = async (updates) => {
+    const updated = await saveMonthlySavingsGoal({ ...savingsGoal, ...updates });
     setSavingsGoal(updated);
   };
 
@@ -391,10 +410,10 @@ export default function LiquidityManager({
     handleUpdateSavingsGoal({ isTransferredThisMonth: !savingsGoal.isTransferredThisMonth });
   };
 
-  const handleSaveSavingsModal = (e) => {
+  const handleSaveSavingsModal = async (e) => {
     e.preventDefault();
     if (!savingsModal) return;
-    const updated = saveMonthlySavingsGoal({
+    const updated = await saveMonthlySavingsGoal({
       ...savingsGoal,
       ...savingsModal,
       amountPEN: parseFloat(savingsModal.amountPEN) || 0,
@@ -551,61 +570,50 @@ export default function LiquidityManager({
       </div>
 
       {/* Summary Formula Bar (Dinámica según Mes 1 o Mes 2) */}
-      <div className="card" style={{
-        padding: '0.85rem 1.25rem',
-        marginBottom: '1.5rem',
-        fontSize: '0.82rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '0.75rem 1.25rem',
-        background: '#ffffff',
-        border: '1px solid var(--border-color)'
-      }}>
+      <div className="summary-formula-card">
         {activeLiquidityView === 'month1' ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem 1.25rem', flexWrap: 'wrap' }}>
-            <div>
+          <div className="summary-formula-items">
+            <div className="summary-formula-item">
               <span style={{ color: 'var(--text-muted)' }}>1. Saldo Hoy: </span>
               <strong style={{ color: 'var(--text-main)' }}>S/ {availableCashTodayPEN.toFixed(2)}</strong>
             </div>
-            <div>
+            <div className="summary-formula-item">
               <span style={{ color: 'var(--text-muted)' }}>2. Sueldos (+): </span>
               <strong style={{ color: '#15803d' }}>+ S/ {totalMonthlyIncomePEN.toFixed(2)}</strong>
             </div>
-            <div>
+            <div className="summary-formula-item">
               <span style={{ color: 'var(--text-muted)' }}>3. Fijos Pendientes (-): </span>
               <strong style={{ color: '#b45309' }}>- S/ {pendingFixedExpensesPEN.toFixed(2)}</strong>
             </div>
-            <div>
+            <div className="summary-formula-item">
               <span style={{ color: 'var(--text-muted)' }}>4. Deuda TC Facturada (-): </span>
               <strong style={{ color: tcConfig.isBilledPaidThisMonth ? '#15803d' : '#be123c' }}>
                 {tcConfig.isBilledPaidThisMonth ? 'S/ 0.00 (Pagada ✓)' : `- S/ ${pendingBilledDebtInPEN.toFixed(2)}`}
               </strong>
             </div>
             {pendingSavingsInPEN > 0 && (
-              <div>
+              <div className="summary-formula-item">
                 <span style={{ color: 'var(--text-muted)' }}>5. Ahorro Programado (-): </span>
                 <strong style={{ color: '#0369a1' }}>- S/ {pendingSavingsInPEN.toFixed(2)}</strong>
               </div>
             )}
           </div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem 1.25rem', flexWrap: 'wrap' }}>
-            <div>
+          <div className="summary-formula-items">
+            <div className="summary-formula-item">
               <span style={{ color: 'var(--text-muted)' }}>1. Sueldos Mes 2 (+): </span>
               <strong style={{ color: '#15803d' }}>+ S/ {totalMonthlyIncomePEN.toFixed(2)}</strong>
             </div>
-            <div>
+            <div className="summary-formula-item">
               <span style={{ color: 'var(--text-muted)' }}>2. Fijos Recurrentes (-): </span>
               <strong style={{ color: '#b45309' }}>- S/ {totalFixedExpensesPEN.toFixed(2)}</strong>
             </div>
-            <div>
+            <div className="summary-formula-item">
               <span style={{ color: 'var(--text-muted)' }}>3. Compras TC de HOY (-): </span>
               <strong style={{ color: '#be123c' }}>- S/ {creditCardNewPurchases.totalPurchasesInPEN.toFixed(2)}</strong>
             </div>
             {totalPlannedSavingsInPEN > 0 && (
-              <div>
+              <div className="summary-formula-item">
                 <span style={{ color: 'var(--text-muted)' }}>4. Ahorro Programado (-): </span>
                 <strong style={{ color: '#0369a1' }}>- S/ {totalPlannedSavingsInPEN.toFixed(2)}</strong>
               </div>
@@ -613,53 +621,51 @@ export default function LiquidityManager({
           </div>
         )}
 
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          TC Ref: <strong style={{ color: 'var(--text-main)' }}>1 USD = S/ {exchangeRate.toFixed(3)}</strong>
+        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.65rem', paddingTop: '0.5rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem' }}>
+          <span>💡 <em>{activeLiquidityView === 'month1' ? 'Mes Inmediato (Corte a pagar ahora)' : 'Mes Subsiguiente (Alerta de consumos)'}</em></span>
+          <span>TC Ref: <strong style={{ color: 'var(--text-main)' }}>1 USD = S/ {exchangeRate.toFixed(3)}</strong></span>
         </div>
       </div>
 
-      {/* SECTION TABS (Organized breakdown below hero numbers) */}
-      <div style={{
-        display: 'flex',
-        gap: '0.5rem',
-        marginBottom: '1.25rem',
-        overflowX: 'auto',
-        paddingBottom: '0.25rem'
-      }}>
+      {/* SECTION TABS (Optimizados para móvil con grid 2x2 y desktop horizontal) */}
+      <div className="liquidity-nav-grid">
         <button
+          type="button"
           onClick={() => setActiveSection('cuentas')}
-          className={`tab-btn ${activeSection === 'cuentas' ? 'active' : ''}`}
-          style={{ padding: '0.55rem 1rem', fontSize: '0.84rem' }}
+          className={`liquidity-nav-item ${activeSection === 'cuentas' ? 'active' : ''}`}
         >
-          <Coins size={16} />
-          <span>Cuentas & Efectivo ({accounts.length})</span>
+          <Coins size={18} />
+          <span>Cuentas & Efectivo</span>
+          <span className="nav-count-badge">{accounts.length}</span>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveSection('ingresos')}
-          className={`tab-btn ${activeSection === 'ingresos' ? 'active' : ''}`}
-          style={{ padding: '0.55rem 1rem', fontSize: '0.84rem' }}
+          className={`liquidity-nav-item ${activeSection === 'ingresos' ? 'active' : ''}`}
         >
-          <TrendingUp size={16} />
-          <span>Mis Sueldos ({incomes.length})</span>
+          <TrendingUp size={18} />
+          <span>Mis Sueldos</span>
+          <span className="nav-count-badge">{incomes.length}</span>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveSection('fijos')}
-          className={`tab-btn ${activeSection === 'fijos' ? 'active' : ''}`}
-          style={{ padding: '0.55rem 1rem', fontSize: '0.84rem' }}
+          className={`liquidity-nav-item ${activeSection === 'fijos' ? 'active' : ''}`}
         >
-          <Home size={16} />
-          <span>Gastos Fijos & Ahorro ({fixedExpenses.length})</span>
+          <Home size={18} />
+          <span>Fijos & Ahorro</span>
+          <span className="nav-count-badge">{fixedExpenses.length}</span>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveSection('tarjeta')}
-          className={`tab-btn ${activeSection === 'tarjeta' ? 'active' : ''}`}
-          style={{ padding: '0.55rem 1rem', fontSize: '0.84rem' }}
+          className={`liquidity-nav-item ${activeSection === 'tarjeta' ? 'active' : ''}`}
         >
-          <CreditCard size={16} />
-          <span>Tarjeta de Crédito & Deudas</span>
+          <CreditCard size={18} />
+          <span>Tarjeta Crédito</span>
         </button>
       </div>
 

@@ -394,11 +394,28 @@ export const saveAccount = async (account) => {
 
   if (client && user) {
     try {
-      const payload = { ...itemToSave };
-      if (!isValidUUID(payload.user_id)) delete payload.user_id;
-      await client.from('accounts').upsert([payload]);
+      // Sanitizar el payload enviando únicamente las columnas existentes en la tabla public.accounts
+      const cleanPayload = {
+        id: itemToSave.id,
+        name: itemToSave.name,
+        type: itemToSave.type,
+        bank: itemToSave.bank || null,
+        currency: itemToSave.currency || 'PEN',
+        initial_balance: parseFloat(itemToSave.initial_balance) || 0,
+        current_balance: parseFloat(itemToSave.current_balance ?? itemToSave.initial_balance) || 0,
+        is_operating: Boolean(itemToSave.is_operating),
+        color: itemToSave.color || '#3b82f6',
+        created_at: itemToSave.created_at || new Date().toISOString()
+      };
+      if (isValidUUID(user?.id)) {
+        cleanPayload.user_id = user.id;
+      }
+      const { error } = await client.from('accounts').upsert([cleanPayload]);
+      if (error) {
+        console.warn('Supabase account save notice (respaldado en local):', error.message);
+      }
     } catch (err) {
-      console.warn('Supabase account save error:', err);
+      console.warn('Supabase account save exception:', err);
     }
   }
   return itemToSave;
@@ -458,6 +475,10 @@ export const saveIncome = async (income) => {
     ...income,
     id: income.id || 'inc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
     amount: parseFloat(income.amount) || 0,
+    gross_salary: parseFloat(income.gross_salary || income.amount) || 0,
+    regime: income.regime || 'planilla_general',
+    pension_system_id: income.pension_system_id || 'afp_integra',
+    has_suspension_4ta: Boolean(income.has_suspension_4ta),
     user_id: user?.id || null,
     created_at: income.created_at || new Date().toISOString()
   };
@@ -472,9 +493,39 @@ export const saveIncome = async (income) => {
 
   if (client && user) {
     try {
-      const payload = { ...itemToSave };
-      if (!isValidUUID(payload.user_id)) delete payload.user_id;
-      await client.from('incomes').upsert([payload]);
+      const cleanPayload = {
+        id: itemToSave.id,
+        title: itemToSave.title,
+        amount: parseFloat(itemToSave.amount) || 0,
+        currency: itemToSave.currency || 'PEN',
+        frequency: itemToSave.frequency || 'mensual',
+        gross_salary: parseFloat(itemToSave.gross_salary) || 0,
+        regime: itemToSave.regime || 'planilla_general',
+        pension_system_id: itemToSave.pension_system_id || 'afp_integra',
+        has_suspension_4ta: Boolean(itemToSave.has_suspension_4ta),
+        created_at: itemToSave.created_at || new Date().toISOString()
+      };
+      if (isValidUUID(user?.id)) {
+        cleanPayload.user_id = user.id;
+      }
+      let { error } = await client.from('incomes').upsert([cleanPayload]);
+      
+      // Fallback si la tabla en Supabase no ha ejecutado aún el ALTER TABLE para columnas de planilla
+      if (error) {
+        const basePayload = {
+          id: cleanPayload.id,
+          title: cleanPayload.title,
+          amount: cleanPayload.amount,
+          currency: cleanPayload.currency,
+          frequency: cleanPayload.frequency,
+          created_at: cleanPayload.created_at
+        };
+        if (cleanPayload.user_id) basePayload.user_id = cleanPayload.user_id;
+        const retry = await client.from('incomes').upsert([basePayload]);
+        if (retry.error) {
+          console.warn('Supabase income save notice (respaldado en local):', retry.error.message);
+        }
+      }
     } catch (err) {
       console.warn('Error saving income to Supabase:', err);
     }
@@ -550,9 +601,24 @@ export const saveFixedExpense = async (fixed) => {
 
   if (client && user) {
     try {
-      const payload = { ...itemToSave };
-      if (!isValidUUID(payload.user_id)) delete payload.user_id;
-      await client.from('fixed_expenses').upsert([payload]);
+      const cleanPayload = {
+        id: itemToSave.id,
+        title: itemToSave.title,
+        amount: parseFloat(itemToSave.amount) || 0,
+        currency: itemToSave.currency || 'PEN',
+        category: itemToSave.category || 'servicios',
+        due_day: parseInt(itemToSave.due_day) || 1,
+        is_paid: Boolean(itemToSave.is_paid),
+        account_id: itemToSave.account_id || null,
+        created_at: itemToSave.created_at || new Date().toISOString()
+      };
+      if (isValidUUID(user?.id)) {
+        cleanPayload.user_id = user.id;
+      }
+      const { error } = await client.from('fixed_expenses').upsert([cleanPayload]);
+      if (error) {
+        console.warn('Supabase fixed expense notice (respaldado en local):', error.message);
+      }
     } catch (err) {
       console.warn('Error saving fixed expense to Supabase:', err);
     }
@@ -850,14 +916,14 @@ export const DEFAULT_TC_CONFIG = {
   isBilledPaidThisMonth: false // Si ya fue pagada en este ciclo
 };
 
-export const fetchCreditCardConfig = () => {
+export const getCachedCreditCardConfig = () => {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY_TC);
     if (raw) {
       return { ...DEFAULT_TC_CONFIG, ...JSON.parse(raw) };
     }
   } catch (e) {
-    console.warn('Error reading TC config:', e);
+    console.warn('Error reading cached TC config:', e);
   }
   const legacyBase = parseFloat(localStorage.getItem('saveahorro_tc_base_debt') || '0');
   const initial = { ...DEFAULT_TC_CONFIG, billedDebtPEN: legacyBase };
@@ -865,10 +931,72 @@ export const fetchCreditCardConfig = () => {
   return initial;
 };
 
-export const saveCreditCardConfig = (config) => {
+export const fetchCreditCardConfig = async () => {
+  const client = getSupabaseClient();
+  const user = await getCurrentUser();
+  if (client && user && isValidUUID(user.id)) {
+    try {
+      const { data, error } = await client
+        .from('credit_card_configs')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        const mapped = {
+          name: data.name || DEFAULT_TC_CONFIG.name,
+          bank: data.bank || DEFAULT_TC_CONFIG.bank,
+          closingDay: data.closing_day ?? DEFAULT_TC_CONFIG.closingDay,
+          dueDay: data.due_day ?? DEFAULT_TC_CONFIG.dueDay,
+          billedDebtPEN: parseFloat(data.billed_debt_pen) || 0,
+          billedDebtUSD: parseFloat(data.billed_debt_usd) || 0,
+          paymentAccountPEN: data.payment_account_pen || '',
+          paymentAccountUSD: data.payment_account_usd || '',
+          isBilledPaidThisMonth: Boolean(data.is_billed_paid_this_month)
+        };
+        localStorage.setItem(LOCAL_STORAGE_KEY_TC, JSON.stringify(mapped));
+        return mapped;
+      }
+    } catch (e) {
+      console.warn('Error fetching credit_card_configs from Supabase:', e);
+    }
+  }
+  return getCachedCreditCardConfig();
+};
+
+export const saveCreditCardConfig = async (config) => {
   const updated = { ...DEFAULT_TC_CONFIG, ...config };
   localStorage.setItem(LOCAL_STORAGE_KEY_TC, JSON.stringify(updated));
   localStorage.setItem('saveahorro_tc_base_debt', (updated.billedDebtPEN || 0).toString());
+
+  const client = getSupabaseClient();
+  const user = await getCurrentUser();
+  if (client && user && isValidUUID(user.id)) {
+    try {
+      const payload = {
+        id: 'tc_' + user.id.slice(0, 12),
+        user_id: user.id,
+        name: updated.name,
+        bank: updated.bank,
+        closing_day: parseInt(updated.closingDay) || 20,
+        due_day: parseInt(updated.dueDay) || 5,
+        billed_debt_pen: parseFloat(updated.billedDebtPEN) || 0,
+        billed_debt_usd: parseFloat(updated.billedDebtUSD) || 0,
+        payment_account_pen: updated.paymentAccountPEN || null,
+        payment_account_usd: updated.paymentAccountUSD || null,
+        is_billed_paid_this_month: Boolean(updated.isBilledPaidThisMonth),
+        updated_at: new Date().toISOString()
+      };
+      const { error } = await client.from('credit_card_configs').upsert([payload]);
+      if (error) {
+        console.warn('Supabase credit card config notice (respaldado en local):', error.message);
+      }
+    } catch (err) {
+      console.warn('Error saving credit_card_configs to Supabase:', err);
+    }
+  }
   return updated;
 };
 
@@ -882,21 +1010,75 @@ export const DEFAULT_SAVINGS_GOAL = {
   isTransferredThisMonth: false // Si ya se trasladó a reserva este mes
 };
 
-export const fetchMonthlySavingsGoal = () => {
+export const getCachedMonthlySavingsGoal = () => {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY_SAVINGS_GOAL);
     if (raw) {
       return { ...DEFAULT_SAVINGS_GOAL, ...JSON.parse(raw) };
     }
   } catch (e) {
-    console.warn('Error reading savings goal:', e);
+    console.warn('Error reading cached savings goal:', e);
   }
   return DEFAULT_SAVINGS_GOAL;
 };
 
-export const saveMonthlySavingsGoal = (goal) => {
+export const fetchMonthlySavingsGoal = async () => {
+  const client = getSupabaseClient();
+  const user = await getCurrentUser();
+  if (client && user && isValidUUID(user.id)) {
+    try {
+      const { data, error } = await client
+        .from('savings_goals')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        const mapped = {
+          amountPEN: parseFloat(data.amount_pen) || 0,
+          amountUSD: parseFloat(data.amount_usd) || 0,
+          sourceIncomeId: data.source_income_id || '',
+          destinationAccountId: data.destination_account_id || '',
+          isTransferredThisMonth: Boolean(data.is_transferred_this_month)
+        };
+        localStorage.setItem(LOCAL_STORAGE_KEY_SAVINGS_GOAL, JSON.stringify(mapped));
+        return mapped;
+      }
+    } catch (e) {
+      console.warn('Error fetching savings_goals from Supabase:', e);
+    }
+  }
+  return getCachedMonthlySavingsGoal();
+};
+
+export const saveMonthlySavingsGoal = async (goal) => {
   const updated = { ...DEFAULT_SAVINGS_GOAL, ...goal };
   localStorage.setItem(LOCAL_STORAGE_KEY_SAVINGS_GOAL, JSON.stringify(updated));
+
+  const client = getSupabaseClient();
+  const user = await getCurrentUser();
+  if (client && user && isValidUUID(user.id)) {
+    try {
+      const payload = {
+        id: 'goal_' + user.id.slice(0, 12),
+        user_id: user.id,
+        amount_pen: parseFloat(updated.amountPEN) || 0,
+        amount_usd: parseFloat(updated.amountUSD) || 0,
+        source_income_id: updated.sourceIncomeId || null,
+        destination_account_id: updated.destinationAccountId || null,
+        is_transferred_this_month: Boolean(updated.isTransferredThisMonth),
+        updated_at: new Date().toISOString()
+      };
+      const { error } = await client.from('savings_goals').upsert([payload]);
+      if (error) {
+        console.warn('Supabase savings goals notice (respaldado en local):', error.message);
+      }
+    } catch (err) {
+      console.warn('Error saving savings_goals to Supabase:', err);
+    }
+  }
   return updated;
 };
 
