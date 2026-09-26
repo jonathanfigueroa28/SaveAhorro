@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { signInWithEmail, signUpWithEmail, getCurrentUser, getSupabaseClient } from '../lib/supabaseClient';
-import { User, Mail, Lock, LogIn, UserPlus, X, CheckCircle2, AlertCircle, ShieldCheck, Sparkles } from 'lucide-react';
+import { User, Mail, Lock, LogIn, UserPlus, X, CheckCircle2, AlertCircle, ShieldCheck, Sparkles, Database } from 'lucide-react';
 
-export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
+export default function AuthModal({ isOpen, onClose, onAuthSuccess, onOpenCloudConfig }) {
   const [mode, setMode] = useState('login'); // 'login' or 'register'
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -38,129 +38,49 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     const client = getSupabaseClient();
 
     try {
-      if (client) {
-        // Conexión Supabase Activa
-        if (mode === 'login') {
-          const data = await signInWithEmail(email, password);
-          if (data?.user) {
-            const profile = {
-              firstName: data.user.user_metadata?.first_name || email.split('@')[0] || 'Jonathan',
-              lastName: data.user.user_metadata?.last_name || ''
-            };
-            setSuccessMsg(`¡Bienvenido de vuelta, ${profile.firstName}!`);
-            setTimeout(() => {
-              onAuthSuccess && onAuthSuccess(data.user, profile);
-              onClose();
-            }, 800);
-          }
-        } else {
+      if (!client) {
+        setErrorMsg('Base de datos no configurada. Haz clic en "Conectar Supabase" para ingresar las credenciales de tu base de datos.');
+        setLoading(false);
+        return;
+      }
+
+      if (mode === 'login') {
+        const data = await signInWithEmail(email, password);
+        if (data?.user) {
           const profile = {
-            firstName: firstName.trim(),
-            lastName: lastName.trim()
+            firstName: data.user.user_metadata?.first_name || email.split('@')[0] || 'Jonathan',
+            lastName: data.user.user_metadata?.last_name || ''
           };
-          const data = await signUpWithEmail(email, password, {
-            first_name: profile.firstName,
-            last_name: profile.lastName
-          });
-          if (data?.user) {
-            setSuccessMsg(`¡Cuenta creada con éxito! Bienvenido, ${profile.firstName}.`);
-            setTimeout(() => {
-              onAuthSuccess && onAuthSuccess(data.user, profile);
-              onClose();
-            }, 900);
-          }
+          setSuccessMsg(`¡Bienvenido de vuelta, ${profile.firstName}!`);
+          setTimeout(() => {
+            onAuthSuccess && onAuthSuccess(data.user, profile);
+            onClose();
+          }, 800);
         }
       } else {
-        // Modo Local Autónomo (Sin requerir nube obligatoria)
-        let localUsers = [];
-        try {
-          localUsers = JSON.parse(localStorage.getItem('saveahorro_local_users') || '[]');
-        } catch (e) {}
-
-        const normalizedEmail = email.trim().toLowerCase();
-
-        if (mode === 'login') {
-          const existingUser = localUsers.find(u => u.email === normalizedEmail);
-          if (existingUser) {
-            if (existingUser.password !== password) {
-              setErrorMsg('Contraseña incorrecta. Por favor verifica e intenta de nuevo.');
-              setLoading(false);
-              return;
-            }
-            const profile = {
-              firstName: existingUser.firstName || 'Jonathan',
-              lastName: existingUser.lastName || ''
-            };
-            const userObj = {
-              id: existingUser.id,
-              email: existingUser.email,
-              user_metadata: profile
-            };
-            setSuccessMsg(`¡Bienvenido de vuelta, ${profile.firstName}!`);
-            setTimeout(() => {
-              onAuthSuccess && onAuthSuccess(userObj, profile);
-              onClose();
-            }, 800);
-          } else {
-            // Usuario no encontrado en lista local: crear sesión rápida
-            const profile = {
-              firstName: email.split('@')[0] || 'Jonathan',
-              lastName: ''
-            };
-            const userObj = {
-              id: 'local_usr_' + Date.now(),
-              email: normalizedEmail,
-              user_metadata: profile
-            };
-            localUsers.push({
-              id: userObj.id,
-              email: normalizedEmail,
-              password: password,
-              firstName: profile.firstName,
-              lastName: ''
-            });
-            localStorage.setItem('saveahorro_local_users', JSON.stringify(localUsers));
-            setSuccessMsg(`¡Sesión iniciada con éxito!`);
-            setTimeout(() => {
-              onAuthSuccess && onAuthSuccess(userObj, profile);
-              onClose();
-            }, 800);
-          }
-        } else {
-          // Registrar nuevo usuario local
-          const profile = {
-            firstName: firstName.trim(),
-            lastName: lastName.trim()
-          };
-          const userObj = {
-            id: 'local_usr_' + Date.now(),
-            email: normalizedEmail,
-            user_metadata: profile
-          };
-          localUsers = localUsers.filter(u => u.email !== normalizedEmail);
-          localUsers.push({
-            id: userObj.id,
-            email: normalizedEmail,
-            password: password,
-            firstName: profile.firstName,
-            lastName: profile.lastName
-          });
-          localStorage.setItem('saveahorro_local_users', JSON.stringify(localUsers));
-
+        const profile = {
+          firstName: firstName.trim(),
+          lastName: lastName.trim()
+        };
+        const data = await signUpWithEmail(email, password, {
+          first_name: profile.firstName,
+          last_name: profile.lastName
+        });
+        if (data?.user) {
           setSuccessMsg(`¡Cuenta creada con éxito! Bienvenido, ${profile.firstName}.`);
           setTimeout(() => {
-            onAuthSuccess && onAuthSuccess(userObj, profile);
+            onAuthSuccess && onAuthSuccess(data.user, profile);
             onClose();
           }, 900);
         }
       }
     } catch (err) {
       console.error('Auth error:', err);
-      let msg = err.message || 'Ocurrió un error inesperado.';
+      let msg = err.message || 'Ocurrió un error inesperado al conectar con la base de datos.';
       if (msg.includes('Invalid login credentials')) {
-        msg = 'Correo o contraseña incorrectos. Verifica tus datos o crea una cuenta nueva.';
+        msg = 'Correo o contraseña incorrectos. Verifica tus datos o crea una cuenta nueva en la base de datos.';
       } else if (msg.includes('User already registered')) {
-        msg = 'Este correo ya tiene una cuenta creada. Intenta iniciar sesión.';
+        msg = 'Este correo ya tiene una cuenta creada en la base de datos. Intenta iniciar sesión.';
       } else if (msg.includes('Password should be at least 6 characters')) {
         msg = 'La contraseña debe tener al menos 6 caracteres.';
       }
@@ -169,6 +89,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       setLoading(false);
     }
   };
+
+  const isCloudConnected = Boolean(getSupabaseClient());
 
   return (
     <div style={{
@@ -236,10 +158,50 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
           </h3>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
             {mode === 'login' 
-              ? 'Accede a tus cuentas, gastos y liquidez personalizada.' 
-              : 'Tus registros quedarán protegidos y aislados para tu usuario.'}
+              ? 'Accede a tus cuentas, gastos y liquidez en tu base de datos.' 
+              : 'Tus registros se guardan 100% en la base de datos Supabase.'}
           </p>
         </div>
+
+        {!isCloudConnected && (
+          <div style={{
+            marginBottom: '1.25rem',
+            padding: '0.85rem',
+            background: 'rgba(234, 179, 8, 0.12)',
+            border: '1px solid rgba(234, 179, 8, 0.3)',
+            borderRadius: 'var(--radius-md)',
+            color: '#fef08a',
+            fontSize: '0.8rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, marginBottom: '0.3rem' }}>
+              <Database size={15} /> Base de Datos Supabase Requerida
+            </div>
+            <p style={{ margin: 0, lineHeight: 1.4, color: '#fef9c3', fontSize: '0.78rem' }}>
+              Todo se guarda directamente en la base de datos (sin almacenamiento local). Conecta tu proyecto Supabase para iniciar sesión o registrarte.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                onClose && onClose();
+                onOpenCloudConfig && onOpenCloudConfig();
+              }}
+              className="btn btn-secondary"
+              style={{
+                marginTop: '0.65rem',
+                width: '100%',
+                fontSize: '0.8rem',
+                padding: '0.45rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.35rem'
+              }}
+            >
+              <Database size={14} />
+              <span>Conectar Base de Datos Ahora</span>
+            </button>
+          </div>
+        )}
 
         {/* Tab Switcher */}
         <div style={{

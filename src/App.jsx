@@ -27,18 +27,16 @@ import {
   onAuthStateChange,
   fetchAccounts,
   fetchIncomes,
-  fetchFixedExpenses
+  fetchFixedExpenses,
+  fetchUserSettings,
+  saveUserSettings,
+  clearFinancialLocalStorage
 } from './lib/supabaseClient';
 import { PlusCircle, LayoutDashboard, ListFilter, Cloud, Sparkles, ArrowRight, ArrowLeft, Wallet } from 'lucide-react';
 
 export default function App() {
   // Navigation mode: 'landing', 'app' (real user), or 'demo' (interactive test)
-  const [viewMode, setViewMode] = useState(() => {
-    const saved = localStorage.getItem('saveahorro_view_mode');
-    const hasUser = localStorage.getItem('saveahorro_active_user');
-    if (saved === 'app' && !hasUser) return 'landing';
-    return saved || 'landing';
-  });
+  const [viewMode, setViewMode] = useState('landing');
 
   const [demoProfileKey, setDemoProfileKey] = useState('carlos'); // 'carlos' or 'pepe'
   const [demoExpenses, setDemoExpenses] = useState(DEMO_PROFILES.carlos.expenses);
@@ -54,17 +52,11 @@ export default function App() {
   const [incomes, setIncomes] = useState([]);
   const [fixedExpenses, setFixedExpenses] = useState([]);
   
-  // Real user profile state
-  const [userProfile, setUserProfile] = useState(() => {
-    try {
-      const saved = localStorage.getItem('saveahorro_user_profile');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return { firstName: 'Jonathan', lastName: 'Figueroa' };
-  });
+  // Real user profile state (stored in Supabase auth and user_settings)
+  const [userProfile, setUserProfile] = useState({ firstName: 'Usuario', lastName: '' });
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-  // Supabase Auth kept intact in standby
+  // Supabase Auth
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   
@@ -87,16 +79,13 @@ export default function App() {
     }
   }, [demoProfileKey, viewMode]);
 
-  const handleSaveProfile = (newProfile) => {
+  const handleSaveProfile = async (newProfile) => {
     setUserProfile(newProfile);
-    localStorage.setItem('saveahorro_user_profile', JSON.stringify(newProfile));
+    await saveUserSettings({ first_name: newProfile.firstName, last_name: newProfile.lastName });
   };
 
   // Load live market exchange rate
-  const loadExchangeRate = async (forceRefresh = false) => {
-    if (forceRefresh) {
-      localStorage.removeItem('control_ahorro_exchange_rate_v1');
-    }
+  const loadExchangeRate = async () => {
     const data = await fetchLiveExchangeRate();
     if (data?.rate) {
       setExchangeRate(data.rate);
@@ -104,30 +93,39 @@ export default function App() {
     }
   };
 
-  // Load initial data (expenses, accounts, incomes, fixed expenses, user)
+  // Load all user data directly from Supabase DB
   const loadData = async () => {
     setLoading(true);
+    clearFinancialLocalStorage();
+
     const config = getCloudConfig();
     setCloudEnabled(config.isEnabled && Boolean(config.supabaseUrl));
     
     const user = await getCurrentUser();
     setCurrentUser(user);
-    if (user?.user_metadata?.firstName || user?.user_metadata?.first_name) {
-      const fName = user.user_metadata.firstName || user.user_metadata.first_name;
-      const lName = user.user_metadata.lastName || user.user_metadata.last_name || '';
-      setUserProfile({ firstName: fName, lastName: lName });
-    }
 
-    const budget = getMonthlyBudget();
-    setMonthlyBudgetState(budget);
+    if (user) {
+      // Auto-enter app mode if user has active database session
+      setViewMode(prev => prev === 'demo' ? 'demo' : 'app');
 
-    // Si el usuario aún tiene en caché gastos o cuentas antiguas de prueba, reiniciamos en cero
-    if (!localStorage.getItem('saveahorro_zero_defaults_v2')) {
-      localStorage.removeItem('saveahorro_accounts_v2');
-      localStorage.removeItem('saveahorro_incomes_v2');
-      localStorage.removeItem('saveahorro_fixed_expenses_v2');
-      localStorage.removeItem('control_ahorro_expenses_v1');
-      localStorage.setItem('saveahorro_zero_defaults_v2', 'true');
+      // Fetch user profile from user_metadata or user_settings table
+      const metaFirst = user?.user_metadata?.firstName || user?.user_metadata?.first_name;
+      const metaLast = user?.user_metadata?.lastName || user?.user_metadata?.last_name || '';
+
+      const settings = await fetchUserSettings();
+      const finalFirst = settings?.first_name || metaFirst || (user.email ? user.email.split('@')[0] : 'Usuario');
+      const finalLast = settings?.last_name || metaLast || '';
+      setUserProfile({ firstName: finalFirst, lastName: finalLast });
+
+      if (settings?.monthly_budget !== null && settings?.monthly_budget !== undefined) {
+        setMonthlyBudgetState(parseFloat(settings.monthly_budget));
+      }
+      if (settings?.preferred_currency) {
+        setCurrency(settings.preferred_currency);
+      }
+    } else {
+      const budget = getMonthlyBudget();
+      setMonthlyBudgetState(budget);
     }
 
     const [loadedExpenses, loadedAccounts, loadedIncomes, loadedFixed] = await Promise.all([
@@ -137,10 +135,10 @@ export default function App() {
       fetchFixedExpenses()
     ]);
 
-    setExpenses(loadedExpenses);
-    setAccounts(loadedAccounts);
-    setIncomes(loadedIncomes);
-    setFixedExpenses(loadedFixed);
+    setExpenses(loadedExpenses || []);
+    setAccounts(loadedAccounts || []);
+    setIncomes(loadedIncomes || []);
+    setFixedExpenses(loadedFixed || []);
     setLoading(false);
   };
 
@@ -150,7 +148,15 @@ export default function App() {
 
     const subscription = onAuthStateChange(async (event, user) => {
       setCurrentUser(user);
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+      if (event === 'SIGNED_IN') {
+        setViewMode('app');
+        loadData();
+      } else if (event === 'SIGNED_OUT') {
+        setViewMode('landing');
+        setExpenses([]);
+        setAccounts([]);
+        setIncomes([]);
+        setFixedExpenses([]);
         loadData();
       }
     });
@@ -166,15 +172,18 @@ export default function App() {
     } catch (err) {
       console.warn('Sign out warning:', err);
     }
-    localStorage.removeItem('saveahorro_view_mode');
-    localStorage.removeItem('saveahorro_active_user');
+    clearFinancialLocalStorage();
     setCurrentUser(null);
     setViewMode('landing');
+    setExpenses([]);
+    setAccounts([]);
+    setIncomes([]);
+    setFixedExpenses([]);
     loadData();
   };
 
-  const handleCurrencyChange = (newCur) => {
-    setPreferredCurrency(newCur);
+  const handleCurrencyChange = async (newCur) => {
+    await setPreferredCurrency(newCur);
     setCurrency(newCur);
   };
 
@@ -218,9 +227,9 @@ export default function App() {
     setExpenses(prev => prev.filter(e => e.id !== id));
   };
 
-  const handleUpdateBudget = (newBudget) => {
+  const handleUpdateBudget = async (newBudget) => {
     if (viewMode === 'demo') return;
-    saveMonthlyBudget(newBudget);
+    await saveMonthlyBudget(newBudget);
     setMonthlyBudgetState(newBudget);
   };
 
@@ -231,14 +240,12 @@ export default function App() {
     setIsTourOpen(true);  // Activar el tour interactivo guiado de inmediato
   };
 
-  const handleAuthSuccess = (user, profile) => {
+  const handleAuthSuccess = async (user, profile) => {
     setCurrentUser(user);
     if (profile) {
       setUserProfile(profile);
-      localStorage.setItem('saveahorro_user_profile', JSON.stringify(profile));
+      await saveUserSettings({ first_name: profile.firstName, last_name: profile.lastName });
     }
-    localStorage.setItem('saveahorro_active_user', JSON.stringify(user));
-    localStorage.setItem('saveahorro_view_mode', 'app');
     setViewMode('app');
     setActiveTab('form');
     setIsTourOpen(true); // Guiar inmediatamente con el tutorial interactivo
@@ -249,11 +256,6 @@ export default function App() {
   const handleEnterRealApp = () => {
     if (currentUser) {
       setViewMode('app');
-      localStorage.setItem('saveahorro_view_mode', 'app');
-      if (!localStorage.getItem('saveahorro_has_seen_tour')) {
-        setActiveTab('form');
-        setIsTourOpen(true);
-      }
     } else {
       setIsAuthModalOpen(true);
     }
@@ -314,6 +316,7 @@ export default function App() {
           isOpen={isAuthModalOpen}
           onClose={() => setIsAuthModalOpen(false)}
           onAuthSuccess={handleAuthSuccess}
+          onOpenCloudConfig={() => setIsCloudConfigOpen(true)}
         />
       </div>
     );
@@ -561,6 +564,7 @@ export default function App() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         onAuthSuccess={handleAuthSuccess}
+        onOpenCloudConfig={() => setIsCloudConfigOpen(true)}
       />
 
     </div>

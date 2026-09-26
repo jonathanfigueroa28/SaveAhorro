@@ -97,9 +97,6 @@ export default function Dashboard({
       setExchangeData(prev => ({ ...prev, loading: false }));
       return;
     }
-    if (forceRefresh) {
-      localStorage.removeItem('control_ahorro_exchange_rate_v1');
-    }
     setExchangeData(prev => ({ ...prev, loading: true }));
     try {
       const data = await fetchLiveExchangeRate();
