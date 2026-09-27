@@ -199,10 +199,17 @@ export default function App() {
       return;
     }
 
-    const result = await saveExpense(expenseData);
-    const saved = result?.expense || result;
-    if (saved && (saved.amount !== undefined || saved.id)) {
-      setExpenses(prev => [saved, ...prev.filter(e => e && e.id !== saved.id)]);
+    try {
+      const result = await saveExpense(expenseData);
+      const saved = result?.expense || result;
+      if (saved && (saved.amount !== undefined || saved.id)) {
+        setExpenses(prev => [saved, ...prev.filter(e => e && e.id !== saved.id)]);
+      }
+      return result;
+    } catch (err) {
+      console.error('Error guardando gasto en Supabase:', err);
+      alert('Error al guardar gasto en la base de datos: ' + (err.message || 'Error de conexión'));
+      return { cloudError: err.message };
     }
   };
 
@@ -212,9 +219,14 @@ export default function App() {
       return;
     }
 
-    const result = await updateExpense(id, updatedData);
-    const updated = result?.expense || updatedData;
-    setExpenses(prev => prev.map(e => (e.id === id ? { ...e, ...updated } : e)));
+    try {
+      const result = await updateExpense(id, updatedData);
+      const updated = result?.expense || updatedData;
+      setExpenses(prev => prev.map(e => (e.id === id ? { ...e, ...updated } : e)));
+    } catch (err) {
+      console.error('Error actualizando gasto en Supabase:', err);
+      alert('Error al actualizar gasto en la base de datos: ' + (err.message || 'Error de conexión'));
+    }
   };
 
   const handleDeleteExpense = async (id) => {
@@ -223,8 +235,13 @@ export default function App() {
       return;
     }
 
-    await deleteExpense(id);
-    setExpenses(prev => prev.filter(e => e.id !== id));
+    try {
+      await deleteExpense(id);
+      setExpenses(prev => prev.filter(e => e.id !== id));
+    } catch (err) {
+      console.error('Error eliminando gasto en Supabase:', err);
+      alert('Error al eliminar gasto en la base de datos: ' + (err.message || 'Error de conexión'));
+    }
   };
 
   const handleUpdateBudget = async (newBudget) => {

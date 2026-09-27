@@ -276,14 +276,19 @@ export default function LiquidityManager({
   const handleSaveAccountModal = async (e) => {
     e.preventDefault();
     if (!accountModal) return;
-    const saved = await saveAccount(accountModal);
-    if (onAccountsChange) {
-      onAccountsChange(prev => {
-        const exists = prev.some(a => a.id === saved.id);
-        return exists ? prev.map(a => a.id === saved.id ? saved : a) : [...prev, saved];
-      });
+    try {
+      const saved = await saveAccount(accountModal);
+      if (onAccountsChange) {
+        onAccountsChange(prev => {
+          const exists = prev.some(a => a.id === saved.id);
+          return exists ? prev.map(a => a.id === saved.id ? saved : a) : [...prev, saved];
+        });
+      }
+      setAccountModal(null);
+    } catch (err) {
+      console.error('Error al guardar cuenta:', err);
+      alert('Error al guardar en la base de datos: ' + (err.message || 'Error de conexión'));
     }
-    setAccountModal(null);
   };
 
   const handleDeleteAccountAction = async (id) => {
@@ -291,9 +296,13 @@ export default function LiquidityManager({
       alert('Debes mantener al menos una cuenta registrada.');
       return;
     }
-    await deleteAccount(id);
-    if (onAccountsChange) {
-      onAccountsChange(prev => prev.filter(a => a.id !== id));
+    try {
+      await deleteAccount(id);
+      if (onAccountsChange) {
+        onAccountsChange(prev => prev.filter(a => a.id !== id));
+      }
+    } catch (err) {
+      console.error('Error al eliminar cuenta:', err);
     }
   };
 
@@ -331,20 +340,29 @@ export default function LiquidityManager({
       has_suspension_4ta: Boolean(incomeModal.has_suspension_4ta)
     };
 
-    const saved = await saveIncome(payload);
-    if (onIncomesChange) {
-      onIncomesChange(prev => {
-        const exists = prev.some(i => i.id === saved.id);
-        return exists ? prev.map(i => i.id === saved.id ? saved : i) : [...prev, saved];
-      });
+    try {
+      const saved = await saveIncome(payload);
+      if (onIncomesChange) {
+        onIncomesChange(prev => {
+          const exists = prev.some(i => i.id === saved.id);
+          return exists ? prev.map(i => i.id === saved.id ? saved : i) : [...prev, saved];
+        });
+      }
+      setIncomeModal(null);
+    } catch (err) {
+      console.error('Error al guardar ingreso en base de datos:', err);
+      alert('Error al guardar ingreso en la base de datos: ' + (err.message || 'Verifica la conexión a Supabase'));
     }
-    setIncomeModal(null);
   };
 
   const handleDeleteIncomeAction = async (id) => {
-    await deleteIncome(id);
-    if (onIncomesChange) {
-      onIncomesChange(prev => prev.filter(i => i.id !== id));
+    try {
+      await deleteIncome(id);
+      if (onIncomesChange) {
+        onIncomesChange(prev => prev.filter(i => i.id !== id));
+      }
+    } catch (err) {
+      console.error('Error al eliminar ingreso:', err);
     }
   };
 
@@ -352,34 +370,51 @@ export default function LiquidityManager({
   const handleSaveFixedModal = async (e) => {
     e.preventDefault();
     if (!fixedModal) return;
-    const saved = await saveFixedExpense(fixedModal);
-    if (onFixedExpensesChange) {
-      onFixedExpensesChange(prev => {
-        const exists = prev.some(f => f.id === saved.id);
-        return exists ? prev.map(f => f.id === saved.id ? saved : f) : [...prev, saved];
-      });
+    try {
+      const saved = await saveFixedExpense(fixedModal);
+      if (onFixedExpensesChange) {
+        onFixedExpensesChange(prev => {
+          const exists = prev.some(f => f.id === saved.id);
+          return exists ? prev.map(f => f.id === saved.id ? saved : f) : [...prev, saved];
+        });
+      }
+      setFixedModal(null);
+    } catch (err) {
+      console.error('Error al guardar gasto fijo:', err);
+      alert('Error al guardar gasto fijo en la base de datos: ' + (err.message || 'Error de conexión'));
     }
-    setFixedModal(null);
   };
 
   const handleToggleFixedPaid = async (item) => {
-    const updated = { ...item, is_paid: !item.is_paid };
-    await saveFixedExpense(updated);
-    if (onFixedExpensesChange) {
-      onFixedExpensesChange(prev => prev.map(f => f.id === item.id ? updated : f));
+    try {
+      const updated = { ...item, is_paid: !item.is_paid };
+      await saveFixedExpense(updated);
+      if (onFixedExpensesChange) {
+        onFixedExpensesChange(prev => prev.map(f => f.id === item.id ? updated : f));
+      }
+    } catch (err) {
+      console.error('Error al actualizar estado de gasto fijo:', err);
     }
   };
 
   const handleDeleteFixedAction = async (id) => {
-    await deleteFixedExpense(id);
-    if (onFixedExpensesChange) {
-      onFixedExpensesChange(prev => prev.filter(f => f.id !== id));
+    try {
+      await deleteFixedExpense(id);
+      if (onFixedExpensesChange) {
+        onFixedExpensesChange(prev => prev.filter(f => f.id !== id));
+      }
+    } catch (err) {
+      console.error('Error al eliminar gasto fijo:', err);
     }
   };
 
   const handleUpdateTcConfig = async (updates) => {
-    const updated = await saveCreditCardConfig({ ...tcConfig, ...updates });
-    setTcConfig(updated);
+    try {
+      const updated = await saveCreditCardConfig({ ...tcConfig, ...updates });
+      setTcConfig(updated);
+    } catch (err) {
+      console.error('Error al actualizar tarjeta de crédito:', err);
+    }
   };
 
   const handleToggleBilledPaid = () => {
@@ -389,21 +424,30 @@ export default function LiquidityManager({
   const handleSaveTcModal = async (e) => {
     e.preventDefault();
     if (!tcModal) return;
-    const updated = await saveCreditCardConfig({
-      ...tcConfig,
-      ...tcModal,
-      closingDay: parseInt(tcModal.closingDay) || 20,
-      dueDay: parseInt(tcModal.dueDay) || 5,
-      billedDebtPEN: parseFloat(tcModal.billedDebtPEN) || 0,
-      billedDebtUSD: parseFloat(tcModal.billedDebtUSD) || 0
-    });
-    setTcConfig(updated);
-    setTcModal(null);
+    try {
+      const updated = await saveCreditCardConfig({
+        ...tcConfig,
+        ...tcModal,
+        closingDay: parseInt(tcModal.closingDay) || 20,
+        dueDay: parseInt(tcModal.dueDay) || 5,
+        billedDebtPEN: parseFloat(tcModal.billedDebtPEN) || 0,
+        billedDebtUSD: parseFloat(tcModal.billedDebtUSD) || 0
+      });
+      setTcConfig(updated);
+      setTcModal(null);
+    } catch (err) {
+      console.error('Error al guardar configuración de tarjeta:', err);
+      alert('Error al guardar tarjeta en la base de datos: ' + (err.message || 'Error de conexión'));
+    }
   };
 
   const handleUpdateSavingsGoal = async (updates) => {
-    const updated = await saveMonthlySavingsGoal({ ...savingsGoal, ...updates });
-    setSavingsGoal(updated);
+    try {
+      const updated = await saveMonthlySavingsGoal({ ...savingsGoal, ...updates });
+      setSavingsGoal(updated);
+    } catch (err) {
+      console.error('Error al actualizar meta de ahorro:', err);
+    }
   };
 
   const handleToggleSavingsTransferred = () => {
@@ -413,14 +457,19 @@ export default function LiquidityManager({
   const handleSaveSavingsModal = async (e) => {
     e.preventDefault();
     if (!savingsModal) return;
-    const updated = await saveMonthlySavingsGoal({
-      ...savingsGoal,
-      ...savingsModal,
-      amountPEN: parseFloat(savingsModal.amountPEN) || 0,
-      amountUSD: parseFloat(savingsModal.amountUSD) || 0
-    });
-    setSavingsGoal(updated);
-    setSavingsModal(null);
+    try {
+      const updated = await saveMonthlySavingsGoal({
+        ...savingsGoal,
+        ...savingsModal,
+        amountPEN: parseFloat(savingsModal.amountPEN) || 0,
+        amountUSD: parseFloat(savingsModal.amountUSD) || 0
+      });
+      setSavingsGoal(updated);
+      setSavingsModal(null);
+    } catch (err) {
+      console.error('Error al guardar meta de ahorro:', err);
+      alert('Error al guardar plan de ahorro en la base de datos: ' + (err.message || 'Error de conexión'));
+    }
   };
 
   return (

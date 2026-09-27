@@ -160,12 +160,12 @@ export default function ExpenseForm({
     if (res?.cloudError) {
       setSubmitStatus({
         type: 'warning',
-        message: `Guardado localmente. Supabase avisó: ${res.cloudError}`
+        message: `Aviso de base de datos: ${res.cloudError}`
       });
     } else {
       setSubmitStatus({
         type: 'success',
-        message: 'Gasto registrado correctamente'
+        message: '¡Gasto registrado en la base de datos con éxito!'
       });
     }
 

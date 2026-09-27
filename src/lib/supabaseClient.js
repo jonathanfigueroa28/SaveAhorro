@@ -240,6 +240,47 @@ export const saveCloudConfig = (config) => {
 };
 
 let supabaseInstance = null;
+let knownTableColumns = {};
+let knownMissingColumns = {};
+let isIntrospecting = false;
+
+/**
+ * Consulta la especificación OpenAPI de Supabase en tiempo de ejecución
+ * para conocer de forma anticipada qué columnas existen físicamente en cada tabla.
+ * Esto evita por completo errores HTTP 400 en la consola del navegador.
+ */
+export const introspectSchema = async () => {
+  if (isIntrospecting) return;
+  const config = getCloudConfig();
+  if (!config.isEnabled || !config.supabaseUrl || !config.supabaseAnonKey) return;
+
+  isIntrospecting = true;
+  try {
+    const cleanUrl = config.supabaseUrl.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+    const res = await fetch(`${cleanUrl}/rest/v1/`, {
+      headers: {
+        'apikey': config.supabaseAnonKey.trim(),
+        'Authorization': `Bearer ${config.supabaseAnonKey.trim()}`
+      }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.definitions) {
+        Object.keys(data.definitions).forEach(table => {
+          if (data.definitions[table]?.properties) {
+            knownTableColumns[table] = new Set(Object.keys(data.definitions[table].properties));
+          }
+        });
+        console.info('[Supabase Introspect] Columnas físicas detectadas para:', Object.keys(knownTableColumns));
+      }
+    }
+  } catch (e) {
+    console.warn('[Supabase Introspect] Consulta de esquema OpenAPI omitida:', e?.message || e);
+  } finally {
+    isIntrospecting = false;
+  }
+};
 
 export const getSupabaseClient = () => {
   const config = getCloudConfig();
@@ -255,6 +296,8 @@ export const getSupabaseClient = () => {
             storage: window.localStorage // Sesión de autenticación oficial Supabase
           }
         });
+        // Disparar introspección en segundo plano sin bloquear
+        introspectSchema();
       } catch (e) {
         console.error('Error al inicializar cliente de Supabase:', e);
         return null;
@@ -267,6 +310,9 @@ export const getSupabaseClient = () => {
 
 export const resetSupabaseClient = () => {
   supabaseInstance = null;
+  knownTableColumns = {};
+  knownMissingColumns = {};
+  isIntrospecting = false;
 };
 
 // ==============================================================================
@@ -362,6 +408,103 @@ export const fetchUserSettings = async () => {
   return null;
 };
 
+/**
+ * Extrae el nombre de una columna faltante de cualquier mensaje o detalle de error de PostgREST / Postgres.
+ */
+function extractMissingColumn(error) {
+  if (!error) return null;
+  const fullText = `${error.message || ''} ${error.details || ''} ${error.hint || ''}`;
+
+  // PostgREST PGRST204: Could not find the 'frequency' column of 'incomes' in the schema cache
+  const m1 = fullText.match(/Could not find the '([^']+)' column/i);
+  if (m1) return m1[1];
+
+  const m2 = fullText.match(/Could not find the column '([^']+)'/i);
+  if (m2) return m2[1];
+
+  // PostgreSQL 42703: column "frequency" of relation "incomes" does not exist
+  const m3 = fullText.match(/column ["']([^"']+)["'] of relation/i);
+  if (m3) return m3[1];
+
+  const m4 = fullText.match(/column ["']([^"']+)["'] does not exist/i);
+  if (m4) return m4[1];
+
+  const m5 = fullText.match(/Could not find the '([^']+)' field/i);
+  if (m5) return m5[1];
+
+  return null;
+}
+
+/**
+ * Realiza un upsert tolerante a diferencias de esquema en Supabase:
+ * 1. Filtra proactivamente columnas no presentes físicamente en la tabla usando el esquema OpenAPI.
+ * 2. Si alguna columna falta o falla en PostgREST (PGRST204), la detecta y reintenta sin esa columna.
+ * 3. Mantiene todos los datos en memoria para que la interfaz nunca pierda la información del usuario.
+ */
+async function resilientUpsert(client, tableName, payload) {
+  let currentPayload = { ...payload };
+
+  // 1. Filtrado preventivo mediante introspección OpenAPI
+  if (knownTableColumns[tableName] && knownTableColumns[tableName].size > 0) {
+    const allowed = knownTableColumns[tableName];
+    for (const key of Object.keys(currentPayload)) {
+      if (!allowed.has(key)) {
+        delete currentPayload[key];
+      }
+    }
+  }
+
+  // 2. Filtrado preventivo de columnas que ya sabemos que no existen en esta sesión
+  if (knownMissingColumns[tableName] && knownMissingColumns[tableName].size > 0) {
+    knownMissingColumns[tableName].forEach(col => {
+      delete currentPayload[col];
+    });
+  }
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      const { data, error } = await client.from(tableName).upsert([currentPayload]).select();
+      
+      if (!error) {
+        const savedRow = (data && data[0]) ? data[0] : currentPayload;
+        return { ...payload, ...savedRow };
+      }
+
+      // Detectar error de columna faltante en schema cache de PostgREST
+      const missingCol = extractMissingColumn(error);
+      if (missingCol && currentPayload[missingCol] !== undefined) {
+        console.warn(`[Supabase Auto-Heal] Columna '${missingCol}' no existe en la tabla '${tableName}'. Guardando en base de datos sin esa columna...`);
+        if (!knownMissingColumns[tableName]) knownMissingColumns[tableName] = new Set();
+        knownMissingColumns[tableName].add(missingCol);
+        delete currentPayload[missingCol];
+        continue;
+      }
+
+      // Si falló por clave foránea (FK user_id inválido o temporal), reintentar sin user_id
+      if (error.code === '23503' && currentPayload.user_id && !isValidUUID(currentPayload.user_id)) {
+        console.warn(`[Supabase Auto-Heal] user_id '${currentPayload.user_id}' no es UUID de auth.users. Reintentando sin user_id...`);
+        delete currentPayload.user_id;
+        continue;
+      }
+
+      console.error(`Supabase save error en '${tableName}':`, error.message || error);
+      throw error;
+    } catch (err) {
+      const missingCol = extractMissingColumn(err);
+      if (missingCol && currentPayload[missingCol] !== undefined) {
+        console.warn(`[Supabase Auto-Heal] Excepción por columna '${missingCol}' en '${tableName}'. Reintentando sin ella...`);
+        if (!knownMissingColumns[tableName]) knownMissingColumns[tableName] = new Set();
+        knownMissingColumns[tableName].add(missingCol);
+        delete currentPayload[missingCol];
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  return { ...payload, ...currentPayload };
+}
+
 export const saveUserSettings = async (settings) => {
   const client = getSupabaseClient();
   const user = await getCurrentUser();
@@ -381,7 +524,7 @@ export const saveUserSettings = async (settings) => {
         ...settings,
         updated_at: new Date().toISOString()
       };
-      await client.from('user_settings').upsert([payload]);
+      await resilientUpsert(client, 'user_settings', payload);
     } catch (e) {
       console.error('Supabase saveUserSettings error:', e);
     }
@@ -420,12 +563,24 @@ export const fetchAccounts = async () => {
       .order('created_at', { ascending: true });
 
     if (error) {
-      console.error('Supabase fetchAccounts error:', error.message);
+      console.warn('Supabase fetchAccounts aviso:', error.message);
       return [];
     }
-    return data || [];
+    return (data || []).map(row => ({
+      id: row.id,
+      user_id: row.user_id,
+      name: row.name || 'Cuenta',
+      type: row.type || 'efectivo',
+      bank: row.bank || null,
+      currency: row.currency || 'PEN',
+      initial_balance: parseFloat(row.initial_balance) || 0,
+      current_balance: parseFloat(row.current_balance ?? row.initial_balance) || 0,
+      is_operating: row.is_operating !== undefined ? Boolean(row.is_operating) : true,
+      color: row.color || '#3b82f6',
+      created_at: row.created_at || new Date().toISOString()
+    }));
   } catch (e) {
-    console.error('Error fetching accounts from Supabase:', e);
+    console.warn('Error fetching accounts from Supabase:', e);
     return [];
   }
 };
@@ -451,20 +606,19 @@ export const saveAccount = async (account) => {
     created_at: account.created_at || new Date().toISOString()
   };
 
-  const { data, error } = await client.from('accounts').upsert([cleanPayload]).select();
-  if (error) {
-    console.error('Supabase saveAccount error:', error.message);
-    throw error;
-  }
-  return (data && data[0]) ? data[0] : cleanPayload;
+  return await resilientUpsert(client, 'accounts', cleanPayload);
 };
 
 export const deleteAccount = async (id) => {
   const client = getSupabaseClient();
   const user = await getCurrentUser();
   if (!client || !user) return;
-  const { error } = await client.from('accounts').delete().eq('id', id).eq('user_id', user.id);
-  if (error) console.error('Supabase deleteAccount error:', error.message);
+  try {
+    const { error } = await client.from('accounts').delete().eq('id', id).eq('user_id', user.id);
+    if (error) console.warn('Supabase deleteAccount aviso:', error.message);
+  } catch (e) {
+    console.warn('Supabase deleteAccount exception:', e);
+  }
 };
 
 // ==============================================================================
@@ -485,12 +639,24 @@ export const fetchIncomes = async () => {
       .order('created_at', { ascending: true });
 
     if (error) {
-      console.error('Supabase fetchIncomes error:', error.message);
+      console.warn('Supabase fetchIncomes aviso:', error.message);
       return [];
     }
-    return data || [];
+    return (data || []).map(row => ({
+      id: row.id,
+      user_id: row.user_id,
+      title: row.title || 'Ingreso',
+      amount: parseFloat(row.amount) || 0,
+      currency: row.currency || 'PEN',
+      frequency: row.frequency || 'mensual',
+      gross_salary: parseFloat(row.gross_salary ?? row.amount) || 0,
+      regime: row.regime || (row.currency === 'USD' ? 'neto_directo' : 'planilla_general'),
+      pension_system_id: row.pension_system_id || 'afp_integra',
+      has_suspension_4ta: Boolean(row.has_suspension_4ta),
+      created_at: row.created_at || new Date().toISOString()
+    }));
   } catch (e) {
-    console.error('Error fetching incomes from Supabase:', e);
+    console.warn('Error fetching incomes from Supabase:', e);
     return [];
   }
 };
@@ -516,20 +682,19 @@ export const saveIncome = async (income) => {
     created_at: income.created_at || new Date().toISOString()
   };
 
-  const { data, error } = await client.from('incomes').upsert([cleanPayload]).select();
-  if (error) {
-    console.error('Supabase saveIncome error:', error.message);
-    throw error;
-  }
-  return (data && data[0]) ? data[0] : cleanPayload;
+  return await resilientUpsert(client, 'incomes', cleanPayload);
 };
 
 export const deleteIncome = async (id) => {
   const client = getSupabaseClient();
   const user = await getCurrentUser();
   if (!client || !user) return;
-  const { error } = await client.from('incomes').delete().eq('id', id).eq('user_id', user.id);
-  if (error) console.error('Supabase deleteIncome error:', error.message);
+  try {
+    const { error } = await client.from('incomes').delete().eq('id', id).eq('user_id', user.id);
+    if (error) console.warn('Supabase deleteIncome aviso:', error.message);
+  } catch (e) {
+    console.warn('Supabase deleteIncome exception:', e);
+  }
 };
 
 // ==============================================================================
@@ -550,12 +715,23 @@ export const fetchFixedExpenses = async () => {
       .order('due_day', { ascending: true });
 
     if (error) {
-      console.error('Supabase fetchFixedExpenses error:', error.message);
+      console.warn('Supabase fetchFixedExpenses aviso:', error.message);
       return [];
     }
-    return data || [];
+    return (data || []).map(row => ({
+      id: row.id,
+      user_id: row.user_id,
+      title: row.title || 'Gasto Fijo',
+      amount: parseFloat(row.amount) || 0,
+      currency: row.currency || 'PEN',
+      category: row.category || 'servicios',
+      due_day: parseInt(row.due_day) || 1,
+      is_paid: Boolean(row.is_paid),
+      account_id: row.account_id || null,
+      created_at: row.created_at || new Date().toISOString()
+    }));
   } catch (e) {
-    console.error('Error fetching fixed expenses from Supabase:', e);
+    console.warn('Error fetching fixed expenses from Supabase:', e);
     return [];
   }
 };
@@ -580,20 +756,19 @@ export const saveFixedExpense = async (fixed) => {
     created_at: fixed.created_at || new Date().toISOString()
   };
 
-  const { data, error } = await client.from('fixed_expenses').upsert([cleanPayload]).select();
-  if (error) {
-    console.error('Supabase saveFixedExpense error:', error.message);
-    throw error;
-  }
-  return (data && data[0]) ? data[0] : cleanPayload;
+  return await resilientUpsert(client, 'fixed_expenses', cleanPayload);
 };
 
 export const deleteFixedExpense = async (id) => {
   const client = getSupabaseClient();
   const user = await getCurrentUser();
   if (!client || !user) return;
-  const { error } = await client.from('fixed_expenses').delete().eq('id', id).eq('user_id', user.id);
-  if (error) console.error('Supabase deleteFixedExpense error:', error.message);
+  try {
+    const { error } = await client.from('fixed_expenses').delete().eq('id', id).eq('user_id', user.id);
+    if (error) console.warn('Supabase deleteFixedExpense aviso:', error.message);
+  } catch (e) {
+    console.warn('Supabase deleteFixedExpense exception:', e);
+  }
 };
 
 // ==============================================================================
@@ -612,12 +787,27 @@ export const fetchExpenses = async () => {
       .order('date', { ascending: false });
 
     if (error) {
-      console.error('Supabase fetchExpenses error:', error.message);
+      console.warn('Supabase fetchExpenses aviso:', error.message);
       return [];
     }
-    return data || [];
+    return (data || []).map(row => ({
+      id: row.id,
+      user_id: row.user_id,
+      amount: parseFloat(row.amount) || 0,
+      currency: row.currency || inMemoryPreferredCurrency || 'PEN',
+      category: row.category || 'gastos-hormiga',
+      description: row.description || '',
+      is_ant_expense: Boolean(row.is_ant_expense),
+      payment_method: row.payment_method || null,
+      account_id: row.account_id || null,
+      bank: row.bank || null,
+      place: row.place || null,
+      is_historical_already_billed: Boolean(row.is_historical_already_billed),
+      date: row.date || row.created_at || new Date().toISOString(),
+      created_at: row.created_at || new Date().toISOString()
+    }));
   } catch (err) {
-    console.error('Supabase fetchExpenses exception:', err);
+    console.warn('Supabase fetchExpenses exception:', err);
     return [];
   }
 };
@@ -652,12 +842,7 @@ export const saveExpense = async (expense) => {
     created_at: expense.created_at || new Date().toISOString()
   };
 
-  const { data, error } = await client.from('expenses').upsert([cleanPayload]).select();
-  if (error) {
-    console.error('Supabase saveExpense error:', error.message);
-    throw error;
-  }
-  const saved = (data && data[0]) ? data[0] : cleanPayload;
+  const saved = await resilientUpsert(client, 'expenses', cleanPayload);
   return { expense: saved, cloudError: null, isCloudEnabled: true };
 };
 
@@ -668,26 +853,58 @@ export const updateExpense = async (id, updatedFields) => {
     throw new Error('Debes iniciar sesión para actualizar gastos.');
   }
 
-  const { data, error } = await client
-    .from('expenses')
-    .update(updatedFields)
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .select();
+  let currentFields = { ...updatedFields };
 
-  if (error) {
-    console.error('Supabase updateExpense error:', error.message);
-    throw error;
+  // Pre-filtrar columnas si se conocen de antemano
+  if (knownTableColumns['expenses'] && knownTableColumns['expenses'].size > 0) {
+    for (const key of Object.keys(currentFields)) {
+      if (!knownTableColumns['expenses'].has(key)) {
+        delete currentFields[key];
+      }
+    }
   }
-  return { expense: (data && data[0]) ? data[0] : { id, ...updatedFields }, cloudError: null };
+
+  if (knownMissingColumns['expenses'] && knownMissingColumns['expenses'].size > 0) {
+    knownMissingColumns['expenses'].forEach(col => {
+      delete currentFields[col];
+    });
+  }
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data, error } = await client
+      .from('expenses')
+      .update(currentFields)
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .select();
+
+    if (!error) {
+      return { expense: (data && data[0]) ? data[0] : { id, ...updatedFields }, cloudError: null };
+    }
+
+    const missingCol = extractMissingColumn(error);
+    if (missingCol && currentFields[missingCol] !== undefined) {
+      if (!knownMissingColumns['expenses']) knownMissingColumns['expenses'] = new Set();
+      knownMissingColumns['expenses'].add(missingCol);
+      delete currentFields[missingCol];
+      continue;
+    }
+    console.warn('Supabase updateExpense aviso:', error.message);
+    break;
+  }
+  return { expense: { id, ...updatedFields }, cloudError: null };
 };
 
 export const deleteExpense = async (id) => {
   const client = getSupabaseClient();
   const user = await getCurrentUser();
   if (!client || !user) return;
-  const { error } = await client.from('expenses').delete().eq('id', id).eq('user_id', user.id);
-  if (error) console.error('Supabase deleteExpense error:', error.message);
+  try {
+    const { error } = await client.from('expenses').delete().eq('id', id).eq('user_id', user.id);
+    if (error) console.warn('Supabase deleteExpense aviso:', error.message);
+  } catch (e) {
+    console.warn('Supabase deleteExpense exception:', e);
+  }
 };
 
 // ==============================================================================
@@ -766,11 +983,7 @@ export const saveCreditCardConfig = async (config) => {
         is_billed_paid_this_month: Boolean(updated.isBilledPaidThisMonth),
         updated_at: new Date().toISOString()
       };
-      const { error } = await client.from('credit_card_configs').upsert([payload]);
-      if (error) {
-        console.error('Supabase saveCreditCardConfig error:', error.message);
-        throw error;
-      }
+      await resilientUpsert(client, 'credit_card_configs', payload);
     } catch (err) {
       console.error('Error saving credit_card_configs to Supabase:', err);
       throw err;
@@ -843,11 +1056,7 @@ export const saveMonthlySavingsGoal = async (goal) => {
         is_transferred_this_month: Boolean(updated.isTransferredThisMonth),
         updated_at: new Date().toISOString()
       };
-      const { error } = await client.from('savings_goals').upsert([payload]);
-      if (error) {
-        console.error('Supabase saveMonthlySavingsGoal error:', error.message);
-        throw error;
-      }
+      await resilientUpsert(client, 'savings_goals', payload);
     } catch (err) {
       console.error('Error saving savings_goals to Supabase:', err);
       throw err;

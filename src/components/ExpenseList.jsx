@@ -252,17 +252,26 @@ export default function ExpenseList({
   const handleSaveEdit = (e) => {
     e.preventDefault();
     if (!editingExpense || !onUpdateExpense) return;
+
+    let validDateIso = new Date().toISOString();
+    try {
+      const parsed = new Date(editingExpense.date);
+      if (!isNaN(parsed.getTime())) {
+        validDateIso = parsed.toISOString();
+      }
+    } catch (err) {}
+
     onUpdateExpense(editingExpense.id, {
-      amount: parseFloat(editingExpense.amount),
+      amount: parseFloat(editingExpense.amount) || 0,
       currency: editingExpense.currency || 'PEN',
-      category: editingExpense.category,
-      description: editingExpense.description,
+      category: editingExpense.category || 'gastos-hormiga',
+      description: editingExpense.description || '',
       is_ant_expense: Boolean(editingExpense.is_ant_expense),
       payment_method: editingExpense.payment_method || null,
       bank: editingExpense.bank || null,
       place: editingExpense.place || null,
       is_historical_already_billed: Boolean(editingExpense.is_historical_already_billed),
-      date: new Date(editingExpense.date).toISOString()
+      date: validDateIso
     });
     setEditingExpense(null);
   };
