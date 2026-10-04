@@ -487,6 +487,33 @@ async function resilientUpsert(client, tableName, payload) {
         continue;
       }
 
+      // Si falló por formato de UUID inválido (ej: "inc_...", "acc_...", "fix_...") en tabla con columna UUID
+      if (error.code === '22P02' || error.message?.includes('invalid input syntax for type uuid')) {
+        const match = error.message.match(/invalid input syntax for type uuid: "([^"]+)"/i);
+        const badVal = match ? match[1] : null;
+        let healed = false;
+        if (badVal) {
+          for (const [k, v] of Object.entries(currentPayload)) {
+            if (v === badVal) {
+              if (k === 'id') {
+                currentPayload.id = generateUUID();
+                healed = true;
+                console.warn(`[Supabase Auto-Heal] Reemplazado ID no-UUID '${badVal}' por UUID estándar '${currentPayload.id}'`);
+              } else {
+                console.warn(`[Supabase Auto-Heal] Campo '${k}' contenía valor no-UUID '${badVal}'. Removido para compatibilidad.`);
+                delete currentPayload[k];
+                healed = true;
+              }
+            }
+          }
+        }
+        if (!healed && currentPayload.id && !isValidUUID(currentPayload.id)) {
+          currentPayload.id = generateUUID();
+          healed = true;
+        }
+        if (healed) continue;
+      }
+
       console.error(`Supabase save error en '${tableName}':`, error.message || error);
       throw error;
     } catch (err) {
@@ -496,6 +523,10 @@ async function resilientUpsert(client, tableName, payload) {
         if (!knownMissingColumns[tableName]) knownMissingColumns[tableName] = new Set();
         knownMissingColumns[tableName].add(missingCol);
         delete currentPayload[missingCol];
+        continue;
+      }
+      if (err.code === '22P02' || err.message?.includes('invalid input syntax for type uuid')) {
+        currentPayload.id = generateUUID();
         continue;
       }
       throw err;
@@ -592,8 +623,10 @@ export const saveAccount = async (account) => {
     throw new Error('Debes estar conectado a Supabase e iniciar sesión para guardar cuentas en la base de datos.');
   }
 
+  const accountId = (account.id && isValidUUID(account.id)) ? account.id : generateUUID();
+
   const cleanPayload = {
-    id: account.id || ('acc_' + generateUUID().slice(0, 18)),
+    id: accountId,
     user_id: user.id,
     name: account.name || 'Nueva Cuenta',
     type: account.type || 'efectivo',
@@ -668,8 +701,10 @@ export const saveIncome = async (income) => {
     throw new Error('Debes estar conectado a Supabase e iniciar sesión para guardar ingresos en la base de datos.');
   }
 
+  const incomeId = (income.id && isValidUUID(income.id)) ? income.id : generateUUID();
+
   const cleanPayload = {
-    id: income.id || ('inc_' + generateUUID().slice(0, 18)),
+    id: incomeId,
     user_id: user.id,
     title: income.title || 'Ingreso',
     amount: parseFloat(income.amount) || 0,
@@ -743,8 +778,11 @@ export const saveFixedExpense = async (fixed) => {
     throw new Error('Debes estar conectado a Supabase e iniciar sesión para guardar gastos fijos en la base de datos.');
   }
 
+  const fixedId = (fixed.id && isValidUUID(fixed.id)) ? fixed.id : generateUUID();
+  const linkedAccountId = (fixed.account_id && isValidUUID(fixed.account_id)) ? fixed.account_id : null;
+
   const cleanPayload = {
-    id: fixed.id || ('fix_' + generateUUID().slice(0, 18)),
+    id: fixedId,
     user_id: user.id,
     title: fixed.title || 'Gasto Fijo',
     amount: parseFloat(fixed.amount) || 0,
@@ -752,7 +790,7 @@ export const saveFixedExpense = async (fixed) => {
     category: fixed.category || 'servicios',
     due_day: parseInt(fixed.due_day) || 1,
     is_paid: Boolean(fixed.is_paid),
-    account_id: fixed.account_id || null,
+    account_id: linkedAccountId,
     created_at: fixed.created_at || new Date().toISOString()
   };
 
@@ -834,7 +872,7 @@ export const saveExpense = async (expense) => {
     description: expense.description || '',
     is_ant_expense: Boolean(expense.is_ant_expense),
     payment_method: expense.payment_method || null,
-    account_id: expense.account_id || null,
+    account_id: (expense.account_id && isValidUUID(expense.account_id)) ? expense.account_id : null,
     bank: expense.bank || null,
     place: expense.place || null,
     is_historical_already_billed: Boolean(expense.is_historical_already_billed),
@@ -969,8 +1007,9 @@ export const saveCreditCardConfig = async (config) => {
   const user = await getCurrentUser();
   if (client && user) {
     try {
+      const configId = (config.id && isValidUUID(config.id)) ? config.id : (isValidUUID(user.id) ? user.id : generateUUID());
       const payload = {
-        id: 'tc_' + user.id.slice(0, 16),
+        id: configId,
         user_id: user.id,
         name: updated.name,
         bank: updated.bank,
@@ -978,8 +1017,8 @@ export const saveCreditCardConfig = async (config) => {
         due_day: parseInt(updated.dueDay) || 5,
         billed_debt_pen: parseFloat(updated.billedDebtPEN) || 0,
         billed_debt_usd: parseFloat(updated.billedDebtUSD) || 0,
-        payment_account_pen: updated.paymentAccountPEN || null,
-        payment_account_usd: updated.paymentAccountUSD || null,
+        payment_account_pen: (updated.paymentAccountPEN && isValidUUID(updated.paymentAccountPEN)) ? updated.paymentAccountPEN : null,
+        payment_account_usd: (updated.paymentAccountUSD && isValidUUID(updated.paymentAccountUSD)) ? updated.paymentAccountUSD : null,
         is_billed_paid_this_month: Boolean(updated.isBilledPaidThisMonth),
         updated_at: new Date().toISOString()
       };
@@ -1046,13 +1085,14 @@ export const saveMonthlySavingsGoal = async (goal) => {
   const user = await getCurrentUser();
   if (client && user) {
     try {
+      const goalId = (goal.id && isValidUUID(goal.id)) ? goal.id : (isValidUUID(user.id) ? user.id : generateUUID());
       const payload = {
-        id: 'goal_' + user.id.slice(0, 16),
+        id: goalId,
         user_id: user.id,
         amount_pen: parseFloat(updated.amountPEN) || 0,
         amount_usd: parseFloat(updated.amountUSD) || 0,
-        source_income_id: updated.sourceIncomeId || null,
-        destination_account_id: updated.destinationAccountId || null,
+        source_income_id: (updated.sourceIncomeId && isValidUUID(updated.sourceIncomeId)) ? updated.sourceIncomeId : null,
+        destination_account_id: (updated.destinationAccountId && isValidUUID(updated.destinationAccountId)) ? updated.destinationAccountId : null,
         is_transferred_this_month: Boolean(updated.isTransferredThisMonth),
         updated_at: new Date().toISOString()
       };
