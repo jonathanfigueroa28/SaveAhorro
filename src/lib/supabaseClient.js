@@ -514,6 +514,18 @@ async function resilientUpsert(client, tableName, payload) {
         if (healed) continue;
       }
 
+      // Si falló por constraint NOT NULL (código 23502: ej. "null value in column "name" violates not-null constraint")
+      if (error.code === '23502' || error.message?.includes('violates not-null constraint')) {
+        const notNullMatch = error.message.match(/null value in column "([^"]+)" of relation "[^"]+" violates not-null constraint/i);
+        const colName = notNullMatch ? notNullMatch[1] : null;
+        if (colName && currentPayload[colName] === undefined) {
+          const fallbackVal = currentPayload.name || currentPayload.title || currentPayload.description || 'Registro';
+          currentPayload[colName] = fallbackVal;
+          console.warn(`[Supabase Auto-Heal] Satisfecho constraint NOT NULL para columna '${colName}' en '${tableName}' con:`, fallbackVal);
+          continue;
+        }
+      }
+
       console.error(`Supabase save error en '${tableName}':`, error.message || error);
       throw error;
     } catch (err) {
@@ -528,6 +540,15 @@ async function resilientUpsert(client, tableName, payload) {
       if (err.code === '22P02' || err.message?.includes('invalid input syntax for type uuid')) {
         currentPayload.id = generateUUID();
         continue;
+      }
+      if (err.code === '23502' || err.message?.includes('violates not-null constraint')) {
+        const notNullMatch = err.message.match(/null value in column "([^"]+)" of relation "[^"]+" violates not-null constraint/i);
+        const colName = notNullMatch ? notNullMatch[1] : null;
+        if (colName && currentPayload[colName] === undefined) {
+          const fallbackVal = currentPayload.name || currentPayload.title || currentPayload.description || 'Registro';
+          currentPayload[colName] = fallbackVal;
+          continue;
+        }
       }
       throw err;
     }
@@ -675,19 +696,23 @@ export const fetchIncomes = async () => {
       console.warn('Supabase fetchIncomes aviso:', error.message);
       return [];
     }
-    return (data || []).map(row => ({
-      id: row.id,
-      user_id: row.user_id,
-      title: row.title || 'Ingreso',
-      amount: parseFloat(row.amount) || 0,
-      currency: row.currency || 'PEN',
-      frequency: row.frequency || 'mensual',
-      gross_salary: parseFloat(row.gross_salary ?? row.amount) || 0,
-      regime: row.regime || (row.currency === 'USD' ? 'neto_directo' : 'planilla_general'),
-      pension_system_id: row.pension_system_id || 'afp_integra',
-      has_suspension_4ta: Boolean(row.has_suspension_4ta),
-      created_at: row.created_at || new Date().toISOString()
-    }));
+    return (data || []).map(row => {
+      const incName = row.name || row.title || 'Ingreso';
+      return {
+        id: row.id,
+        user_id: row.user_id,
+        name: incName,
+        title: incName,
+        amount: parseFloat(row.amount) || 0,
+        currency: row.currency || 'PEN',
+        frequency: row.frequency || 'mensual',
+        gross_salary: parseFloat(row.gross_salary ?? row.amount) || 0,
+        regime: row.regime || (row.currency === 'USD' ? 'neto_directo' : 'planilla_general'),
+        pension_system_id: row.pension_system_id || 'afp_integra',
+        has_suspension_4ta: Boolean(row.has_suspension_4ta),
+        created_at: row.created_at || new Date().toISOString()
+      };
+    });
   } catch (e) {
     console.warn('Error fetching incomes from Supabase:', e);
     return [];
@@ -702,11 +727,13 @@ export const saveIncome = async (income) => {
   }
 
   const incomeId = (income.id && isValidUUID(income.id)) ? income.id : generateUUID();
+  const incomeName = income.name || income.title || 'Sueldo Principal';
 
   const cleanPayload = {
     id: incomeId,
     user_id: user.id,
-    title: income.title || 'Ingreso',
+    name: incomeName,
+    title: incomeName,
     amount: parseFloat(income.amount) || 0,
     currency: income.currency || 'PEN',
     frequency: income.frequency || 'mensual',
@@ -753,18 +780,22 @@ export const fetchFixedExpenses = async () => {
       console.warn('Supabase fetchFixedExpenses aviso:', error.message);
       return [];
     }
-    return (data || []).map(row => ({
-      id: row.id,
-      user_id: row.user_id,
-      title: row.title || 'Gasto Fijo',
-      amount: parseFloat(row.amount) || 0,
-      currency: row.currency || 'PEN',
-      category: row.category || 'servicios',
-      due_day: parseInt(row.due_day) || 1,
-      is_paid: Boolean(row.is_paid),
-      account_id: row.account_id || null,
-      created_at: row.created_at || new Date().toISOString()
-    }));
+    return (data || []).map(row => {
+      const fixName = row.name || row.title || 'Gasto Fijo';
+      return {
+        id: row.id,
+        user_id: row.user_id,
+        name: fixName,
+        title: fixName,
+        amount: parseFloat(row.amount) || 0,
+        currency: row.currency || 'PEN',
+        category: row.category || 'servicios',
+        due_day: parseInt(row.due_day) || 1,
+        is_paid: Boolean(row.is_paid),
+        account_id: row.account_id || null,
+        created_at: row.created_at || new Date().toISOString()
+      };
+    });
   } catch (e) {
     console.warn('Error fetching fixed expenses from Supabase:', e);
     return [];
@@ -780,11 +811,13 @@ export const saveFixedExpense = async (fixed) => {
 
   const fixedId = (fixed.id && isValidUUID(fixed.id)) ? fixed.id : generateUUID();
   const linkedAccountId = (fixed.account_id && isValidUUID(fixed.account_id)) ? fixed.account_id : null;
+  const fixedName = fixed.name || fixed.title || 'Gasto Fijo';
 
   const cleanPayload = {
     id: fixedId,
     user_id: user.id,
-    title: fixed.title || 'Gasto Fijo',
+    name: fixedName,
+    title: fixedName,
     amount: parseFloat(fixed.amount) || 0,
     currency: fixed.currency || 'PEN',
     category: fixed.category || 'servicios',

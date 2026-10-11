@@ -332,8 +332,11 @@ export default function LiquidityManager({
       finalAmount = payrollPreview.netSalary;
     }
 
+    const incomeTitle = (incomeModal.title || incomeModal.name || 'Sueldo Principal').trim();
     const payload = {
       ...incomeModal,
+      title: incomeTitle,
+      name: incomeTitle,
       amount: finalAmount,
       gross_salary: incomeModal.gross_salary ? parseFloat(incomeModal.gross_salary) : finalAmount,
       regime: regime,
@@ -864,6 +867,7 @@ export default function LiquidityManager({
             <button
               onClick={() => setIncomeModal({
                 id: '',
+                name: 'Sueldo Principal',
                 title: 'Sueldo Principal',
                 currency: 'PEN',
                 frequency: 'mensual',
@@ -871,7 +875,7 @@ export default function LiquidityManager({
                 pension_system_id: 'afp_integra',
                 gross_salary: '3000',
                 has_suspension_4ta: false,
-                amount: '2619.30'
+                amount: '2579.63'
               })}
               className="btn btn-primary"
               style={{ padding: '0.5rem 0.9rem', fontSize: '0.8rem' }}
@@ -1011,9 +1015,9 @@ export default function LiquidityManager({
 
           <div style={{
             marginTop: '1.25rem',
-            padding: '1rem',
-            background: 'rgba(16, 185, 129, 0.08)',
-            border: '1px solid rgba(16, 185, 129, 0.2)',
+            padding: '1.1rem 1.25rem',
+            background: 'var(--success-bg)',
+            border: '1px solid var(--success-border)',
             borderRadius: 'var(--radius-md)',
             display: 'flex',
             justifyContent: 'space-between',
@@ -1021,10 +1025,10 @@ export default function LiquidityManager({
             flexWrap: 'wrap',
             gap: '0.5rem'
           }}>
-            <span style={{ fontWeight: 600, fontSize: '0.88rem', color: '#a7f3d0' }}>
+            <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--success-text)' }}>
               Total Ingresos Estimados del Mes:
             </span>
-            <span style={{ fontSize: '1.35rem', fontWeight: 800, color: '#10b981' }}>
+            <span style={{ fontSize: '1.45rem', fontWeight: 900, color: 'var(--success)' }}>
               {formatMoney(totalMonthlyIncomePEN, 'PEN')}
             </span>
           </div>
@@ -1861,8 +1865,8 @@ export default function LiquidityManager({
                   </label>
                   <input
                     type="text"
-                    value={incomeModal.title}
-                    onChange={(e) => setIncomeModal({ ...incomeModal, title: e.target.value })}
+                    value={incomeModal.title || incomeModal.name || ''}
+                    onChange={(e) => setIncomeModal({ ...incomeModal, title: e.target.value, name: e.target.value })}
                     className="form-input"
                     placeholder="Ej: Sueldo Principal BCP, Remoto..."
                     required
@@ -1985,46 +1989,49 @@ export default function LiquidityManager({
                   {/* DESGLOSE EN VIVO (Cálculo Perú) */}
                   {payrollPreview && (
                     <div style={{
-                      background: 'rgba(30, 41, 59, 0.55)',
-                      border: '1.5px solid rgba(99, 102, 241, 0.25)',
-                      borderRadius: 'var(--radius-lg, 14px)',
+                      background: 'var(--bg-main)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-lg, 16px)',
                       padding: '1.25rem',
-                      marginBottom: '1.5rem'
+                      marginBottom: '1.5rem',
+                      boxShadow: 'var(--shadow-sm)'
                     }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.9rem' }}>
-                        <span style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border-color)' }}>
+                        <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                           <span>🇵🇪 Desglose de tu Sueldo en Mano</span>
                         </span>
                         <span style={{
                           fontSize: '0.75rem',
                           fontWeight: 700,
-                          color: 'var(--primary)',
-                          background: 'rgba(99, 102, 241, 0.12)',
-                          padding: '0.2rem 0.6rem',
+                          color: 'var(--text-muted)',
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border-color)',
+                          padding: '0.2rem 0.65rem',
                           borderRadius: '20px'
                         }}>
                           UIT 2026: S/ {PERU_UIT.toLocaleString()}
                         </span>
                       </div>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', fontSize: '0.88rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', fontSize: '0.9rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>Sueldo Bruto:</span>
-                          <span style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.95rem' }}>
+                          <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>Sueldo Bruto:</span>
+                          <span style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '1rem' }}>
                             S/ {payrollPreview.grossSalary.toFixed(2)}
                           </span>
                         </div>
 
                         {payrollPreview.pensionDeduction > 0 && (
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>
+                            <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>
                               (-) Descuento Pensión ({payrollPreview.pensionName}):
                             </span>
                             <span style={{
                               fontWeight: 700,
-                              color: '#f43f5e',
-                              background: 'rgba(244, 63, 94, 0.1)',
-                              padding: '0.15rem 0.5rem',
+                              color: 'var(--danger-text)',
+                              background: 'var(--danger-bg)',
+                              border: '1px solid var(--danger-border)',
+                              padding: '0.2rem 0.6rem',
                               borderRadius: '6px'
                             }}>
                               - S/ {payrollPreview.pensionDeduction.toFixed(2)}
@@ -2033,14 +2040,15 @@ export default function LiquidityManager({
                         )}
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>
+                          <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>
                             (-) {payrollPreview.taxName}:
                           </span>
                           <span style={{
                             fontWeight: 700,
-                            color: payrollPreview.taxDeduction > 0 ? '#f43f5e' : '#10b981',
-                            background: payrollPreview.taxDeduction > 0 ? 'rgba(244, 63, 94, 0.1)' : 'rgba(16, 185, 129, 0.1)',
-                            padding: '0.15rem 0.5rem',
+                            color: payrollPreview.taxDeduction > 0 ? 'var(--danger-text)' : 'var(--success-text)',
+                            background: payrollPreview.taxDeduction > 0 ? 'var(--danger-bg)' : 'var(--success-bg)',
+                            border: `1px solid ${payrollPreview.taxDeduction > 0 ? 'var(--danger-border)' : 'var(--success-border)'}`,
+                            padding: '0.2rem 0.6rem',
                             borderRadius: '6px'
                           }}>
                             {payrollPreview.taxDeduction > 0 ? `- S/ ${payrollPreview.taxDeduction.toFixed(2)}` : 'S/ 0.00 (Exonerado)'}
@@ -2049,26 +2057,27 @@ export default function LiquidityManager({
 
                         {/* HERO BANNER DE SUELDO NETO */}
                         <div style={{
-                          marginTop: '0.75rem',
-                          padding: '1rem',
-                          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.06) 100%)',
-                          border: '1.5px solid rgba(16, 185, 129, 0.35)',
+                          marginTop: '0.85rem',
+                          padding: '1.1rem 1.25rem',
+                          background: 'var(--success-bg)',
+                          border: '1px solid var(--success-border)',
+                          borderLeft: '4px solid var(--success)',
                           borderRadius: '12px',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
                           flexWrap: 'wrap',
-                          gap: '0.5rem'
+                          gap: '0.75rem'
                         }}>
                           <div>
-                            <div style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '0.92rem' }}>
+                            <div style={{ fontWeight: 800, color: 'var(--success-text)', fontSize: '0.95rem' }}>
                               (=) Tu Sueldo Neto en Cuenta:
                             </div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
-                              Dinero real a depositar en tu banco cada fin de mes
+                            <div style={{ fontSize: '0.78rem', color: 'var(--success)', marginTop: '0.15rem' }}>
+                              Dinero real que ingresa a tu cuenta bancaria cada mes
                             </div>
                           </div>
-                          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#10b981', letterSpacing: '-0.02em' }}>
+                          <div style={{ fontSize: '1.65rem', fontWeight: 900, color: 'var(--success)', letterSpacing: '-0.02em' }}>
                             S/ {payrollPreview.netSalary.toFixed(2)}
                           </div>
                         </div>
@@ -2077,28 +2086,40 @@ export default function LiquidityManager({
                       {/* Beneficios anuales por ley proyectados */}
                       {payrollPreview.gratiEstimatedMonthly > 0 && (
                         <div style={{
-                          marginTop: '0.85rem',
-                          padding: '0.75rem 0.9rem',
+                          marginTop: '0.9rem',
+                          padding: '0.9rem 1rem',
                           background: 'var(--bg-card)',
                           border: '1px solid var(--border-color)',
-                          borderRadius: 'var(--radius-md, 10px)',
-                          fontSize: '0.82rem',
-                          color: 'var(--text-muted)',
-                          lineHeight: '1.5'
+                          borderRadius: 'var(--radius-md, 12px)',
+                          fontSize: '0.84rem',
+                          color: 'var(--text-main)',
+                          lineHeight: '1.6',
+                          boxShadow: 'var(--shadow-sm)'
                         }}>
-                          <div style={{ fontWeight: 700, color: 'var(--text-main)', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <div style={{ fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                             <span>🎁 Beneficios anuales por ley proyectados:</span>
                           </div>
-                          <div>
-                            • <strong>Gratificaciones (Julio y Diciembre):</strong> ~S/ {((payrollPreview.grossSalary * (incomeModal.regime === 'planilla_general' ? 1.09 : 0.545))).toFixed(2)} cada una (incluye 9% bonif. EsSalud)
+                          <div style={{ color: 'var(--text-muted)' }}>
+                            • <strong style={{ color: 'var(--text-main)' }}>Gratificaciones (Julio y Diciembre):</strong> ~S/ {((payrollPreview.grossSalary * (incomeModal.regime === 'planilla_general' ? 1.09 : 0.545))).toFixed(2)} cada una (incluye 9% bonif. EsSalud)
                           </div>
-                          <div>
-                            • <strong>CTS (Mayo y Noviembre):</strong> ~S/ {(payrollPreview.ctsEstimatedMonthly * 12).toFixed(2)} al año
+                          <div style={{ color: 'var(--text-muted)' }}>
+                            • <strong style={{ color: 'var(--text-main)' }}>CTS (Mayo y Noviembre):</strong> ~S/ {(payrollPreview.ctsEstimatedMonthly * 12).toFixed(2)} al año
                           </div>
                         </div>
                       )}
 
-                      <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.75rem', display: 'flex', alignItems: 'flex-start', gap: '0.35rem' }}>
+                      <div style={{
+                        fontSize: '0.82rem',
+                        color: 'var(--text-muted)',
+                        marginTop: '0.85rem',
+                        padding: '0.65rem 0.85rem',
+                        background: 'var(--bg-card)',
+                        border: '1px dashed var(--border-color)',
+                        borderRadius: 'var(--radius-sm, 8px)',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '0.4rem'
+                      }}>
                         <span>💡</span>
                         <span>{payrollPreview.summaryText}</span>
                       </div>
